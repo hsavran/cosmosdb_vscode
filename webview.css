@@ -1,0 +1,237 @@
+body{
+    background: #404040;
+    margin:0;
+    padding:0 2px;
+    font-family: Verdana, Geneva, Tahoma, sans-serif;
+}
+.maingridcontainer{
+    display:  grid;
+    grid-template-rows: 40px  200px 30px calc(100vh - 280px);
+}
+
+.containergriditem{
+
+}
+
+.connectcontainer{                
+    background: #101525;
+    display: flex;
+    justify-content: space-around;    
+    align-items: center;
+    color:white;
+}
+
+.connectcontainer>div{
+    padding: 5px 0;
+}
+
+.connectcontainer label{            
+    font-size:13px;
+}
+
+.connectcontainer select {
+    width: 150px;
+    padding: 3px;
+}
+
+.querycontainer{
+    background: white;
+    font-size:18px;
+    
+}
+.summarycontainer{    
+    background: #152025;    
+    text-align: center;
+    display: flex; 
+    justify-content: space-around;
+    align-items: center;
+    color: linen;
+    text-shadow: 0 0 2px black;
+}
+
+.summarycontainer > article{
+    padding: 1px 15px;            
+    margin: 2px 5px;
+    border-left: 1px solid white;
+    border-right: 1px solid white;           
+}
+
+.summarycontainer article label {
+    padding: 3px 0;
+    letter-spacing: 1px;
+    font-weight: normal;
+}
+
+.summarycontainer article span{
+    font-weight: bold;
+    color:lemonchiffon;
+}
+
+.bottomcontainer{
+    background: black;
+    border:1px solid gainsboro;
+    display:flex;
+    flex-wrap: wrap;
+}
+
+.queryresults{
+    width: min-content;
+    flex-grow:1;
+    height:calc(100vh - 290px);
+    overflow-y: auto;
+}
+
+.queryoptionresults {
+    width: 300px;
+    height: calc(100vh - 293px);
+    padding: 10px 0 0 0;
+    /* background: linear-gradient(50deg, #E6F3FB, lightblue); */
+    color: black;
+    font-size: 12px;
+    display: none;   
+    background: linear-gradient(90deg, white, whitesmoke);
+    border-left: 2px ridge gray;    
+    line-height: 18px;
+}
+
+.headertxt{
+    padding: 0 0 0 5px;
+}
+
+.MetricsBox > div {
+    padding:2px 7px;
+}
+
+.samegroup{
+    box-shadow: 0 1px 1px gainsboro;
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+}
+
+.detailgroup{
+    border-bottom: 1px dotted black;
+    text-indent: 6px;
+}
+
+.sameline{
+    display: flex;
+    justify-content: space-between;
+}
+
+.sameline>span{
+    font-weight: bold;
+}
+
+.alignleft{
+    text-align: left;
+}
+
+.alignright{
+    text-align:right;
+}
+
+.withborder{
+    border-bottom: 1px solid black;
+}
+
+.MetricsTabs{
+    width: 40px;
+    color:white;
+    text-shadow: 1px 1px 1px black;
+    display:flex;
+    justify-content: flex-end;
+    align-content: flex-start;
+    flex-wrap: wrap;                
+    background:#101020;
+}
+
+.metricstablink{
+        margin: 2px 0 0 0;
+        border-bottom: 1px solid white;
+        writing-mode: vertical-rl;
+        text-orientation:mixed;
+        padding: 5px 10px;
+        height: 120px;
+        text-align: center;
+        background: linear-gradient(to left, #102031, #203040);
+}
+
+.metricstablink:hover{
+    cursor: pointer;
+    color:lawngreen;
+}
+
+.metricstablinkSelected {
+    color: deepskyblue;
+}
+
+.loadDialog{
+    width:400px;                
+    background: #101020;
+    text-align: center;
+    border: 3px solid lightgray;
+    box-shadow: 0 0 5px white;
+    border-radius: 5px;
+    color:white;
+    font-size: 13px;
+    overflow:hidden;
+    letter-spacing: 1px;
+}
+
+.connectionbox{
+    width: 400px;                
+    border: 3px solid lightgray;
+    box-shadow: 0 0 5px white;
+    background: #101020;
+    color:white;
+    font-size: 13px;
+    letter-spacing: 1px;
+    text-align: left;
+}
+
+.commandbutton{
+    background: aliceblue;
+    padding: 4px 5px;
+    border-radius: 3px;
+    color:black;
+    bordeR:1px solid black;    
+}
+
+.pointreadbox{
+    padding: 4px 5px !important;
+    border: 1px solid gray;
+    background: white;
+    color:black;
+}
+
+.pointreadbox>label{
+    text-shadow: 0 0 1px navy;
+}
+
+.pointreadbox>input[type='button']{
+    background: gainsboro;
+}
+
+.section1{    
+    color:white;
+    background: black;
+    font-variant: small-caps;
+}
+
+.errorbox{
+    min-width: 400px;                
+    border: 3px solid lightgray;
+    box-shadow: 0 0 5px white;
+    background: #101020;
+    color:white;
+    font-size: 13px;
+    letter-spacing: 1px;
+    text-align: left;
+    line-height: 18px;
+}
+
+.ace_selected_word {
+    background: red;
+    position:absolute;
+}
