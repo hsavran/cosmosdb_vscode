@@ -1,65 +1,37 @@
-# cosmosdb README
+# Cosmos DB SQL Studio (Preview)
 
-This is the README for your extension "cosmosdb". After writing up a brief description, we recommend including the following sections.
+You can query Azure Cosmos DB SQL API by using VS Code now. Extension displays Execution Metrics, Indexing Policies and Overall Information about selected database and container.
+
+![Cosmos DB SQL Studio](images/azuresqleditor.gif)
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+* Connect to Cosmos DB SQL API by using token or connection string.
+* Query Azure Cosmos DB SQL API
+* Point Read by using Partition Key and Id
+* Query Options support
+* Display Request Unit Charge
+* Display Query Execution Plan
+* Display Selected Container's Indexing Policy
+* Display Selected Database and Container's overall information. (works only with token connection)
+    * Container's Partition Keys
+    * Container's Unique Keys
+    * Container's Conflict Policy
+    * Database's Region
+    * Database's Failover Policy
+    * Database's Consistency Level
+    * Analytical Storage information
+    * Free Tier information
+    * Database's Backup Type
 
-For example if there is an image subfolder under your extension project workspace:
-
-\!\[feature X\]\(images/feature-x.png\)
-
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
-
-## Requirements
-
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
-
-## Extension Settings
-
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
-This extension contributes the following settings:
-
-* `myExtension.enable`: enable/disable this extension
-* `myExtension.thing`: set to `blah` to do something
-
-## Known Issues
-
-Calling out known issues can help limit users opening duplicate issues against your extension.
+![feature X](images/overall.png)
 
 ## Release Notes
 
-Users appreciate release notes as you update your extension.
+This is the first version of the tool. 
+I hope you will enjoy to query Cosmos DB SQL API from VS Code.
 
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
------------------------------------------------------------------------------------------------------------
-
-## Working with Markdown
-
-**Note:** You can author your README using Visual Studio Code.  Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux)
-* Toggle preview (`Shift+CMD+V` on macOS or `Shift+Ctrl+V` on Windows and Linux)
-* Press `Ctrl+Space` (Windows, Linux) or `Cmd+Space` (macOS) to see a list of Markdown snippets
-
-### For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+### 0.0.1
+ v
+Initial release of Cosmos DB Studio.
+F5 Executes queries. VS Code environment menu comes up with F5 events too.
