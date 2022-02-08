@@ -1,7 +1,8 @@
 var containers=[];
 var dbAccounts=[];
 var queryOptions = {
-	populateQueryMetrics :false
+	populateQueryMetrics :false,
+	maxItemCount: undefined
 };
 var currentConnType = "";
 
@@ -39,8 +40,17 @@ function AddDatabase(dbname){
 
 function GetQueryOptions(){
 	queryOptions.populateQueryMetrics = document.getElementById('optionEnableQM').checked;
+	queryOptions.forceQueryPlan = document.getElementById('optionForceQPlan').checked;
 	queryOptions.maxDegreeOfParallelism = Number(document.getElementById('optionParellelism').value);
-	queryOptions.maxItemCount = Number(document.getElementById('optionMaxItemCount').value);	
+	var maxitemcount = Number(document.getElementById('optionMaxItemCount').value);
+	if (maxitemcount > 0){
+		queryOptions.maxItemCount = maxitemcount;
+	} else {
+		queryOptions.maxItemCount = undefined;
+	}
+	
+	//queryOptions.consistencyPolicy = "Eventual";
+	//queryOptions.populateQuotaInfo =true;	
 }
 
 function ClearIndexingPolicy(){
@@ -210,28 +220,78 @@ window.addEventListener('message', event => {
 			//var result =JSON.stringify(message.response.result[0],null,2);
 			if (!message.response.hasError)
 			{
-				document.getElementById("queryrequnit").textContent = message.response.charge;            
+				document.getElementById("queryrequnit").textContent = message.response.charge.toFixed(2);            
 				document.getElementById("queryresults").innerHTML ='';
 				var temp = new JSONFormatter(message.response.result,2,{theme:'dark', hoverPreviewEnabled:true});            
 				document.getElementById("queryresults").appendChild(temp.render());
+				document.getElementById("numberOfPartitions").textContent = message.response.qm.numberofpartition;
 				document.getElementById("queryitemcount").textContent =message.response.result.length;
-				document.getElementById("documentLoadTime").textContent = message.response.qm.documentLoadTime;
-				document.getElementById("documentWriteTime").textContent = message.response.qm.documentWriteTime;
+				document.getElementById("documentLoadTime").textContent = message.response.qm.documentLoadTime.toFixed(2);
+				document.getElementById("documentWriteTime").textContent = message.response.qm.documentWriteTime.toFixed(2);
 				document.getElementById("indexHitDocumentCount").textContent = message.response.qm.indexHitDocumentCount;
 				document.getElementById("outputDocumentCount").textContent = message.response.qm.outputDocumentCount;
 				document.getElementById("outputDocumentSize").textContent = message.response.qm.outputDocumentSize;
-				document.getElementById("totalQueryExecutionTime").textContent = message.response.qm.totalQueryExecutionTime;
-				document.getElementById("logicalPlanBuildTime").textContent = message.response.qm.queryPreparationTimes.logicalPlanBuildTime;
-				document.getElementById("physicalPlanBuildTime").textContent = message.response.qm.queryPreparationTimes.physicalPlanBuildTime;
-				document.getElementById("queryCompilationTime").textContent = message.response.qm.queryPreparationTimes.queryCompilationTime;
-				document.getElementById("queryOptimizationTime").textContent = message.response.qm.queryPreparationTimes.queryOptimizationTime;
+				document.getElementById("totalQueryExecutionTime").textContent = message.response.qm.totalQueryExecutionTime.toFixed(2);
+				document.getElementById("logicalPlanBuildTime").textContent = message.response.qm.queryPreparationTimes.logicalPlanBuildTime.toFixed(2);
+				document.getElementById("physicalPlanBuildTime").textContent = message.response.qm.queryPreparationTimes.physicalPlanBuildTime.toFixed(2);
+				document.getElementById("queryCompilationTime").textContent = message.response.qm.queryPreparationTimes.queryCompilationTime.toFixed(2);
+				document.getElementById("queryOptimizationTime").textContent = message.response.qm.queryPreparationTimes.queryOptimizationTime.toFixed(2);
 				document.getElementById("retrievedDocumentSize").textContent = message.response.qm.retrievedDocumentSize;
 				document.getElementById("retrievedDocumentCount").textContent = message.response.qm.retrievedDocumentCount;			
-				document.getElementById("queryEngineExecutionTime").textContent = message.response.qm.runtimeExecutionTimes.queryEngineExecutionTime;
-				document.getElementById("systemFunctionExecutionTime").textContent = message.response.qm.runtimeExecutionTimes.systemFunctionExecutionTime;
-				document.getElementById("userDefinedFunctionExecutionTime").textContent = message.response.qm.runtimeExecutionTimes.userDefinedFunctionExecutionTime;
-				document.getElementById("totalQueryExecutionTime").textContent = message.response.qm.totalQueryExecutionTime;
-				document.getElementById("vmExecutionTime").textContent = message.response.qm.vmExecutionTime;			
+				document.getElementById("queryEngineExecutionTime").textContent = message.response.qm.runtimeExecutionTimes.queryEngineExecutionTime.toFixed(2);
+				document.getElementById("systemFunctionExecutionTime").textContent = message.response.qm.runtimeExecutionTimes.systemFunctionExecutionTime.toFixed(2);
+				document.getElementById("userDefinedFunctionExecutionTime").textContent = message.response.qm.runtimeExecutionTimes.userDefinedFunctionExecutionTime.toFixed(2);
+				document.getElementById("totalQueryExecutionTime").textContent = message.response.qm.totalQueryExecutionTime.toFixed(2);
+				document.getElementById("vmExecutionTime").textContent = message.response.qm.vmExecutionTime.toFixed(2);
+				var rows = document.getElementById('partitionmetricsrows');
+				while (rows.hasChildNodes()){
+					rows.removeChild(rows.lastChild);
+				}
+				if (message.response.qms.length > 1){
+					document.getElementById("numberOfPartitions").classList.add('partitionexecutionmetriclink');
+				} else{
+					document.getElementById("numberOfPartitions").classList.remove('partitionexecutionmetriclink');
+				}
+				for (var qm=0; message.response.qms.length; qm++){
+					var tr = document.createElement('tr');
+					
+					var pid = document.createElement('td');
+					var pidtxt = document.createTextNode(message.response.qms[qm].partitionid);
+					pid.appendChild(pidtxt);
+					tr.appendChild(pid);
+
+					var rdoc = document.createElement('td');
+					var rdoctxt = document.createTextNode(message.response.qms[qm].retrievedDocumentCount);
+					rdoc.appendChild(rdoctxt);
+					tr.appendChild(rdoc);
+
+					var rsize = document.createElement('td');
+					var rsizetxt = document.createTextNode(message.response.qms[qm].retrievedDocumentSize);
+					rsize.appendChild(rsizetxt);
+					tr.appendChild(rsize);
+
+					var qe = document.createElement('td');
+					var qetxt = document.createTextNode(message.response.qms[qm].totalQueryExecutionTime.toFixed(2) + ' ms');
+					qe.appendChild(qetxt);
+					tr.appendChild(qe);
+
+					var dload = document.createElement('td');
+					var dloadtxt = document.createTextNode(message.response.qms[qm].documentLoadTime.toFixed(2) + ' ms');
+					dload.appendChild(dloadtxt);
+					tr.appendChild(dload);
+
+					var etime = document.createElement('td');
+					var etimetxt = document.createTextNode(message.response.qms[qm].vmExecutionTime.toFixed(2) + ' ms');
+					etime.appendChild(etimetxt);
+					tr.appendChild(etime);
+
+					var ru = document.createElement('td');
+					var rutxt = document.createTextNode(message.response.qms[qm].requestUnits);
+					ru.appendChild(rutxt);
+					tr.appendChild(ru);
+					var dest = document.getElementById('partitionmetricsrows');
+					dest.appendChild(tr);
+				}				
 			} else {				
 				if (message.response.error){
 					document.getElementById("errorbox").showModal();
@@ -273,7 +333,20 @@ window.addEventListener('message', event => {
 			AddDatabase(message.jsonData);
 			break;
 		case 'addCon':
-			containers.push(message.jsonData);					
-			break;		
+			containers.push(message.jsonData);
+			break;
+		case 'authfail':
+			document.getElementsById('authError').style.display ='block';
+			break;
 		}
 });
+
+document.onkeydown = fkey;
+document.onkeyup = fkey;
+
+function fkey(e){
+	e = e || window.event;
+	if (e.keyCode == 116){
+		HandleQueryExecution();
+	}
+}

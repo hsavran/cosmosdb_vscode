@@ -76,16 +76,18 @@ async function GetConnectionString(rgroup, dbacct){
 }
 
 async function GetDatabases2(){	
+	var requestOptions ={};
+	requestOptions.populateQuotaInfo=true;
 	var { resources} = await cosmosClient.databases.readAll().fetchAll();
 	panel.webview.postMessage({command:'dbCount', jsonData: resources.length});
 	for (var i=0; i<resources.length; i++){
 		var info ={}; // = (({consistencyPolicy, enableAnalyticalStorage, enableAutomaticFailover, enableFreeTier, location, backupPolicy}) => ({ consistencyPolicy, enableAnalyticalStorage, enableAutomaticFailover, enableFreeTier, location, backupPolicy}))(account);
 		info.name = resources[i].id;
-		panel.webview.postMessage({command:'addDb', jsonData: info});
-		//const {containers4: resources} = await cosmosClient.database(resources[i].id).containers.readAll().fetchAll();
-		var temp = await cosmosClient.database(resources[i].id).containers.readAll().fetchAll();
-		var containerList = temp.resources;
-		for (var c=0; c< containerList.length;c++){
+		panel.webview.postMessage({command:'addDb', jsonData: info});		
+		var temp = await cosmosClient.database(resources[i].id).containers.readAll({populateQuotaInfo:true}).fetchAll();
+		//var test = await cosmosClient.database(resources[i].id).container(temp.resources[0].id).read({populateQuotaInfo:true});
+		var containerList = temp.resources;		
+		for (var c=0; c< containerList.length;c++){			
 			panel.webview.postMessage({command:'contCount', jsonData: containerList.length});
 			panel.webview.postMessage({command:'addCon', jsonData: {
 				container: containerList[c].id, 
@@ -109,7 +111,7 @@ function CreateAzureArmItem(subid,rgroup,account,dbname,colls){
 };
 
 async function GetContainers(rgroup, account, dbname, subid, testrid){
-	//const client2 = new CosmosDBManagementClient(creds, subid);
+	//const client2 = new CosmosDBManagementClient(creds, subid);		
 	cosmosArmClient.sqlResources.listSqlContainers(rgroup,account,dbname).then((result) =>{
 		if (result.length > 0){
 			panel.webview.postMessage({command:'contCount', jsonData: result.length});
@@ -156,7 +158,7 @@ async function activate(context) {
 		vscode.commands.registerCommand('cosmosdb.openEditor', () => {
 			panel = vscode.window.createWebviewPanel(
 				'CosmosEditor', 
-				'Cosmos DB Editor', 
+				'Cosmos DB Studio', 
 				vscode.ViewColumn.One,
 				{
 					enableScripts: true
@@ -231,6 +233,8 @@ async function activate(context) {
 											});
 										}
 									}
+								}, reason =>{
+									panel.webview.postMessage({command:"authfail", jsonData: reason});
 								});							
 								break;
 							case 'cstring':
@@ -362,7 +366,11 @@ function getWebviewContent(js1,js2,js3,js4,js5,css1){
                         </div>
                     </div>
                     <div id='ExecutionMetricsBox' class='MetricsBox'>
-                        <div class='samegroup'>		   		
+                        	<div class='samegroup'>
+								<div class='sameline'>			
+								<div>Number of Partitions</div>
+								<span id='numberOfPartitions'></span>								
+							</div>
                              <div class='sameline'>			
                                  <div>Retrieved Documents</div>
                                  <span id='retrievedDocumentCount'></span>
@@ -462,7 +470,18 @@ function getWebviewContent(js1,js2,js3,js4,js5,css1){
 		<div style="padding:10px; display: flex; justify-content: space-around;align-items: center;">        
 			<svg xmlns="http://www.w3.org/2000/svg" style="width:45px" viewBox="0 0 18 18"><defs><radialGradient id="a" cx="-105.006" cy="-10.409" r="5.954" gradientTransform="matrix(1.036 0 0 1.027 117.739 19.644)" gradientUnits="userSpaceOnUse"><stop offset=".183" stop-color="#5ea0ef"/><stop offset="1" stop-color="#0078d4"/></radialGradient><clipPath id="b"><path d="M14.969 7.53a6.137 6.137 0 11-7.395-4.543 6.137 6.137 0 017.395 4.543z" fill="none"/></clipPath></defs><path d="M2.954 5.266a.175.175 0 01-.176-.176A2.012 2.012 0 00.769 3.081a.176.176 0 01-.176-.175.176.176 0 01.176-.176A2.012 2.012 0 002.778.72a.175.175 0 01.176-.176.175.175 0 01.176.176 2.012 2.012 0 002.009 2.009.175.175 0 01.176.176.175.175 0 01-.176.176A2.011 2.011 0 003.13 5.09a.177.177 0 01-.176.176zM15.611 17.456a.141.141 0 01-.141-.141 1.609 1.609 0 00-1.607-1.607.141.141 0 01-.141-.14.141.141 0 01.141-.141 1.608 1.608 0 001.607-1.607.141.141 0 01.141-.141.141.141 0 01.141.141 1.608 1.608 0 001.607 1.607.141.141 0 110 .282 1.609 1.609 0 00-1.607 1.607.141.141 0 01-.141.14z" fill="#50e6ff"/><path d="M14.969 7.53a6.137 6.137 0 11-7.395-4.543 6.137 6.137 0 017.395 4.543z" fill="url(#a)"/><g clip-path="url(#b)" fill="#f2f2f2"><path d="M5.709 13.115a1.638 1.638 0 10.005-3.275 1.307 1.307 0 00.007-.14A1.651 1.651 0 004.06 8.064H2.832a6.251 6.251 0 001.595 5.051zM15.045 7.815c0-.015 0-.03-.007-.044a5.978 5.978 0 00-1.406-2.88 1.825 1.825 0 00-.289-.09 1.806 1.806 0 00-2.3 1.663 2 2 0 00-.2-.013 1.737 1.737 0 00-.581 3.374 1.451 1.451 0 00.541.1h2.03a13.453 13.453 0 002.212-2.11z"/></g><path d="M17.191 3.832c-.629-1.047-2.1-1.455-4.155-1.149a14.606 14.606 0 00-2.082.452 6.456 6.456 0 011.528.767c.241-.053.483-.116.715-.151a7.49 7.49 0 011.103-.089 2.188 2.188 0 011.959.725c.383.638.06 1.729-.886 3a16.723 16.723 0 01-4.749 4.051A16.758 16.758 0 014.8 13.7c-1.564.234-2.682 0-3.065-.636s-.06-1.73.886-2.995c.117-.157.146-.234.279-.392a6.252 6.252 0 01.026-1.63 11.552 11.552 0 00-1.17 1.372C.517 11.076.181 12.566.809 13.613a3.165 3.165 0 002.9 1.249 8.434 8.434 0 001.251-.1 17.855 17.855 0 006.219-2.4A17.808 17.808 0 0016.24 8.03c1.243-1.661 1.579-3.15.951-4.198z" fill="#50e6ff"/></svg>
 			<label>Please wait,<br/> Retrieving Cosmos DB Information...</label>        
-		</div>       
+		</div>
+		<div id='authError' style='font-size:12px;display:none; text-align:center; color:red'>
+		Authentication Denied / Your IT Dep. might blocked this request. <br/>
+			<ul style='text-align:left; font-size:11px'>
+				<li>You need to have Azure Account extension for VSCode.</li>
+				<li>Your Azure account might not have rights to complete this request.</li>
+				<li>Try to connect with Connection String.</li>
+			</ul>
+			<div>
+				<input id='ConnectionBoxLink' type='button' value='Go Back'/>
+			</div>
+		 </div>
 		<div style="display:flex; justify-content: space-between; font-size: 11px; flex-wrap: wrap;">
 			<div style="width:50%">Subscriptions : <span id='countSub'>0</span></div>
 			<div style="width:50%">Resource Groups : <span id='countRes'>0</span></div>
@@ -476,8 +495,8 @@ function getWebviewContent(js1,js2,js3,js4,js5,css1){
             How do you want to connect to Azure Cosmos DB?
         </div>
 		<div style="padding:5px 0;">
-            <input type='radio' checked='checked' id='connectByVs' name='connectoption'>
-            <label for='connectByVs'>Connect by VS Code Azure</label>
+            <input type='radio' id='connectByVs' name='connectoption'>
+            <label for='connectByVs'>Connect by VsCode Azure Account</label>
         </div>  
         <div style="padding:5px 0;">
             <input type="radio" id='connectBycstring' name='connectoption'/>
@@ -497,6 +516,12 @@ function getWebviewContent(js1,js2,js3,js4,js5,css1){
                         <label for='optionEnableQM' title='Use it for debugging slow or expensive queries'>Display Query Metrics</label>
                     </td>				
                 </tr>
+				<tr>
+                    <td colspan=2>
+                        <input type='checkbox' id='optionForceQPlan' name='optionForceQPlan'/>
+                        <label for='optionForceQPlan' title='For queries like aggregates and most cross partition queries, this happens anyway. However, since the library doesn't know what type of query it is until we get back the first response, some optimization can't happen until later.'>Force Query Plan</label>
+                    </td>				
+                </tr>
                 <tr>
                     <td>
                     <label for='optionParellelism' title='The maximum number of concurrent operations that run client side during parallel query execution in the Azure Cosmos DB database service. Negative values make the system automatically decides the number of concurrent operations to run. Default: 0 (no parallelism)'>maxDegreeOfParallelism</label>
@@ -507,12 +532,12 @@ function getWebviewContent(js1,js2,js3,js4,js5,css1){
                 </tr>
                 <tr>
                     <td>
-                        <label for='optionMaxItemCount' title='Max number of items to be returned in the enumeration operation. Default: undefined (server will defined payload) Expirimenting with this value can usually result in the biggest performance changes to the query.The smaller the item count, the faster the first result will be delivered (for non-aggregates). For larger amounts, it will take longer to serve the request, but you'll usually get better throughput for large queries (i.e. if you need 1000 items before you can do any other actions, set maxItemCount to 1000. If you can start doing work after the first 100, set maxItemCount to 100.)'>maxItemCount</label>
+                        <label for='optionMaxItemCount' title='Max number of items to be returned in the enumeration operation. Default: undefined (server will defined payload) Expirimenting with this value can usually result in the biggest performance changes to the query.The smaller the item count, the faster the first result will be delivered (for non-aggregates). For larger amounts, it will take longer to serve the request, but you'll usually get better throughput for large queries (i.e. if you need 1000 items before you can do any other actions, set maxItemCount to 1000. If you can start doing work after the first 100, set maxItemCount to 100.)'>Force Query Plan</label>
                     </td>
                     <td>
                         <input type='number' id='optionMaxItemCount' name='optionMaxItemCount' min='10' value='100' style='width:50px;'/>
                     </td>
-                </tr>
+                </tr>				
                 <tr>
                     <td colspan=2 style='text-align:center'>
                     <input type='button' value='Close' onclick='document.getElementById("queryoptionsbox").close();' />
@@ -547,10 +572,30 @@ function getWebviewContent(js1,js2,js3,js4,js5,css1){
 			<input id='errorboxclosebutton' type='button' value='Close' onclick='document.getElementById("errorbox").close();'/>
 		</div>
 	</dialog>
+	<dialog id='partitionsexecution' class='partitionsexecution'>
+		<table>
+			<thead>
+				<tr>
+					<td>Partition #</td>
+					<td>Retrieved Documents</td>
+					<td>Document Size</td>
+					<td>Query Execution</td>
+					<td>Document Load Time</td>					
+					<td>Execution Time</td>
+					<td>Request Unit</td>
+				</tr>
+			</thead>
+			<tbody id='partitionmetricsrows'>				
+			</tbody>
+		</table>
+		<div style='padding: 5px 0; text-align:center'>
+			<input type='button' id='partitionsexecutionclosebutton' value='Close'/>
+		</div>		
+	</dialog>
     </html>
 	<script>
 	const vscode = acquireVsCodeApi();
-	var editor;	
+	var editor;
 
 	document.addEventListener("DOMContentLoaded", function(event){
 		document.getElementById("connectionbox").showModal();
@@ -564,7 +609,13 @@ function getWebviewContent(js1,js2,js3,js4,js5,css1){
 				enableSnippets: true,
 				enableLiveAutocompletion: false
 			});
-	});	
+	});
+
+	document.getElementById('ConnectionBoxLink').addEventListener("click", function(){
+		document.getElementById("authError").style.display = 'none';
+		document.getElementById("loadingbox").close();
+		document.getElementById("connectionbox").showModal();
+	});
 	
 	document.getElementById("RunQuery").addEventListener("click", function(){
 		HandleQueryExecution();
@@ -578,6 +629,10 @@ function getWebviewContent(js1,js2,js3,js4,js5,css1){
 	document.getElementById("QueryOptionsButton").addEventListener("click", function(){
 		document.getElementById("queryoptionsbox").showModal();
 	});
+
+	document.getElementById("partitionsexecutionclosebutton").addEventListener("click", function(){
+		document.getElementById("partitionsexecution").close();
+	});	
 
 	document.getElementById("connectBycstring").addEventListener("change", function() {		
 		if (document.getElementById("connectBycstring").checked){
@@ -605,7 +660,14 @@ function getWebviewContent(js1,js2,js3,js4,js5,css1){
 	document.getElementById("IndexinPolicyLink").addEventListener("click", function(){
 		var dest = this.getAttribute('data-destination');
 		HandleInfoBoxes(dest);
-	});	
+	});
+
+	document.getElementById("numberOfPartitions").addEventListener("click", function(){
+		if (document.getElementById("numberOfPartitions").classList.contains("partitionexecutionmetriclink"))
+		{
+			document.getElementById("partitionsexecution").showModal();
+		} 
+	});
 	
 	document.getElementById("cosmosdblist").addEventListener("change", function(){
 		var current = document.getElementById('cosmosdblist').value;
@@ -643,7 +705,10 @@ async function ExecuteQuery(dbname, containerid, query, options){
 		count:0,
 		hasError: false,
 		error: '',
+		qms:[],
 		qm:{
+			partitionid: 0,
+			numberofpartition:0,
 			documentLoadTime:0,
 			documentWriteTime:0,
 			indexHitDocumentCount:0,
@@ -665,7 +730,8 @@ async function ExecuteQuery(dbname, containerid, query, options){
 				userDefinedFunctionExecutionTime:0
 			},
 			totalQueryExecutionTime:0,
-			vmExecutionTime:0
+			vmExecutionTime:0,
+			requestUnits:0
 		}
 	};
 	try{
@@ -673,12 +739,19 @@ async function ExecuteQuery(dbname, containerid, query, options){
 		const resources = await queryIterator.fetchNext();
 		cosmosResponse.charge += Number(resources.headers['x-ms-request-charge']);
 		cosmosResponse.result = cosmosResponse.result.concat(resources.resources);		
-		if (resources.queryMetrics[0]){			
-			cosmosResponse.queryMetrics.push(resources.queryMetrics[0]);
+		if (resources.queryMetrics){
+			for (const prop in resources.queryMetrics){				
+				if (resources.queryMetrics[prop]){
+					cosmosResponse.queryMetrics.push(resources.queryMetrics[prop]);
+					cosmosResponse.qms.push(await CreateQueryMetrics(prop, resources.queryMetrics[prop]));					
+				}
+			}			
 		}
 	}
+	
 	for (var q=0;q<cosmosResponse.queryMetrics.length; q++){
-		cosmosResponse.qm.documentLoadTime += cosmosResponse.queryMetrics[q].documentLoadTime._ticks / 10000;
+		if (cosmosResponse.queryMetrics[q])		{
+			cosmosResponse.qm.documentLoadTime += cosmosResponse.queryMetrics[q].documentLoadTime._ticks / 10000;
 		cosmosResponse.qm.documentWriteTime += cosmosResponse.queryMetrics[q].documentWriteTime._ticks / 10000;
 		cosmosResponse.qm.indexHitDocumentCount += cosmosResponse.queryMetrics[q].indexHitDocumentCount;
 		cosmosResponse.qm.indexHitLookupTime += cosmosResponse.queryMetrics[q].indexLookupTime._ticks / 10000;
@@ -695,10 +768,30 @@ async function ExecuteQuery(dbname, containerid, query, options){
 		cosmosResponse.qm.runtimeExecutionTimes.userDefinedFunctionExecutionTime += cosmosResponse.queryMetrics[q].runtimeExecutionTimes.userDefinedFunctionExecutionTime._ticks/10000;
 		cosmosResponse.qm.totalQueryExecutionTime += cosmosResponse.queryMetrics[q].totalQueryExecutionTime._ticks/10000;
 		cosmosResponse.qm.vmExecutionTime += cosmosResponse.queryMetrics[q].vmExecutionTime._ticks/10000;
-	}	
+		}
+		
+	}
+	cosmosResponse.qm.documentLoadTime = await TakeAverage(cosmosResponse.qm.documentLoadTime, cosmosResponse.queryMetrics.length);
+	cosmosResponse.qm.documentWriteTime = await TakeAverage(cosmosResponse.qm.documentWriteTime, cosmosResponse.queryMetrics.length);
+	cosmosResponse.qm.indexHitLookupTime = await TakeAverage(cosmosResponse.qm.indexHitLookupTime, cosmosResponse.queryMetrics.length);
+	cosmosResponse.qm.queryPreparationTimes.logicalPlanBuildTime = await TakeAverage(cosmosResponse.qm.queryPreparationTimes.logicalPlanBuildTime,cosmosResponse.queryMetrics.length);
+	cosmosResponse.qm.queryPreparationTimes.physicalPlanBuildTime = await TakeAverage(cosmosResponse.qm.queryPreparationTimes.physicalPlanBuildTime,cosmosResponse.queryMetrics.length);
+	cosmosResponse.qm.queryPreparationTimes.queryCompilationTime = await TakeAverage(cosmosResponse.qm.queryPreparationTimes.queryCompilationTime,cosmosResponse.queryMetrics.length);
+	cosmosResponse.qm.queryPreparationTimes.queryOptimizationTime = await TakeAverage(cosmosResponse.qm.queryPreparationTimes.queryOptimizationTime,cosmosResponse.queryMetrics.length);
+
+	cosmosResponse.qm.runtimeExecutionTimes.queryEngineExecutionTime = await TakeAverage(cosmosResponse.qm.runtimeExecutionTimes.queryEngineExecutionTime,cosmosResponse.queryMetrics.length);
+	cosmosResponse.qm.runtimeExecutionTimes.systemFunctionExecutionTime = await TakeAverage(cosmosResponse.qm.runtimeExecutionTimes.systemFunctionExecutionTime,cosmosResponse.queryMetrics.length);
+	cosmosResponse.qm.runtimeExecutionTimes.userDefinedFunctionExecutionTime = await TakeAverage(cosmosResponse.qm.runtimeExecutionTimes.userDefinedFunctionExecutionTime,cosmosResponse.queryMetrics.length);
+	cosmosResponse.qm.totalQueryExecutionTime = await TakeAverage(cosmosResponse.qm.totalQueryExecutionTime,cosmosResponse.queryMetrics.length);
+	cosmosResponse.qm.vmExecutionTime = await TakeAverage(cosmosResponse.qm.vmExecutionTime,cosmosResponse.queryMetrics.length);
+
+
+
+
 	cosmosResponse.qm.outputDocumentSize = await formatBytes(cosmosResponse.qm.outputDocumentSize);
 	cosmosResponse.qm.retrievedDocumentSize = await formatBytes(cosmosResponse.qm.retrievedDocumentSize);
 	cosmosResponse.count = cosmosResponse.result.length;
+	cosmosResponse.qm.numberofpartition = cosmosResponse.queryMetrics.length;
 	return cosmosResponse;
 }
 	catch(e){
@@ -707,6 +800,34 @@ async function ExecuteQuery(dbname, containerid, query, options){
 		return cosmosResponse;
 	}
 };
+
+async function CreateQueryMetrics(pid, qmetrics){
+	return {
+		partitionid :pid,
+		documentLoadTime : qmetrics.documentLoadTime._ticks / 10000,
+		documentWriteTime : qmetrics.documentWriteTime._ticks / 10000,
+		indexHitDocumentCount : qmetrics.indexHitDocumentCount,
+		indexHitLookupTime : qmetrics.indexLookupTime._ticks / 10000,
+		outputDocumentCount : qmetrics.outputDocumentCount,
+		outputDocumentSize : await formatBytes(qmetrics.outputDocumentSize),
+		//queryPreparationTimes.logicalPlanBuildTime += cosmosResponse.queryMetrics[q].queryPreparationTimes.logicalPlanBuildTime._ticks / 10000;
+		//queryPreparationTimes.physicalPlanBuildTime += cosmosResponse.queryMetrics[q].queryPreparationTimes.physicalPlanBuildTime._ticks /10000;
+		//queryPreparationTimes.queryCompilationTime += cosmosResponse.queryMetrics[q].queryPreparationTimes.queryCompilationTime._ticks / 10000;
+		//queryPreparationTimes.queryOptimizationTime += cosmosResponse.queryMetrics[q].queryPreparationTimes.queryOptimizationTime._ticks / 10000;
+		retrievedDocumentCount : qmetrics.retrievedDocumentCount,
+		retrievedDocumentSize : await formatBytes(qmetrics.retrievedDocumentSize),
+		//runtimeExecutionTimes.queryEngineExecutionTime += cosmosResponse.queryMetrics[q].runtimeExecutionTimes.queryEngineExecutionTime._ticks/10000;
+		//runtimeExecutionTimes.systemFunctionExecutionTime += cosmosResponse.queryMetrics[q].runtimeExecutionTimes.systemFunctionExecutionTime._ticks/10000;
+		//runtimeExecutionTimes.userDefinedFunctionExecutionTime += cosmosResponse.queryMetrics[q].runtimeExecutionTimes.userDefinedFunctionExecutionTime._ticks/10000;
+		totalQueryExecutionTime : qmetrics.totalQueryExecutionTime._ticks/10000,
+		vmExecutionTime : qmetrics.vmExecutionTime._ticks/10000,
+		requestUnits: qmetrics.clientSideMetrics.requestCharge
+	};
+}
+
+async function TakeAverage(number, counter){
+	return number / counter;
+}
 
 async function HandleErrorTxt(message){
 	try{

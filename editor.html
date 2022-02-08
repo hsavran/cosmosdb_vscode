@@ -212,6 +212,22 @@
 	</div>		
 		<input type='button' value='Close' onclick='document.getElementById("queryoptionsbox").close();' />
 	</dialog>
+	<dialog id='partitionsexecution' class='partitionsexecution'>
+		<table>
+			<thead>
+				<tr>
+					<td>Partition #</td>
+					<td>Retrieved Documents</td>
+					<td>Size</td>
+					<td>Query Execution</td>
+					<td>Document Load Time</td>
+					<td>Write Time</td>
+					<td>Execution Time</td>
+				</tr>
+			</thead>
+
+		</table>
+	</dialog>
 	<script>
 	const vscode = acquireVsCodeApi();
 	var editor;	

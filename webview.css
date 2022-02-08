@@ -10,7 +10,7 @@ body{
 }
 
 .containergriditem{
-
+    width:100vw;
 }
 
 .connectcontainer{                
@@ -75,7 +75,7 @@ body{
 }
 
 .queryresults{
-    width: min-content;
+    width: calc(100vw - 350px);
     flex-grow:1;
     height:calc(100vh - 290px);
     overflow-y: auto;
@@ -167,7 +167,7 @@ body{
 }
 
 .loadDialog{
-    width:400px;                
+    width:500px;                
     background: #101020;
     text-align: center;
     border: 3px solid lightgray;
@@ -234,4 +234,50 @@ body{
 .ace_selected_word {
     background: red;
     position:absolute;
+}
+
+.partitionsexecution{
+    padding:0;
+    box-shadow: 0 0 5px skyblue;    
+}
+
+.partitionsexecution table {
+    width:100%;
+    border-collapse: collapse;
+    text-align: center;
+}
+
+.partitionsexecution table thead{
+    background: #102050;
+    color:white;
+}
+
+.partitionsexecution table thead tr {
+    height: 30px;
+    border-bottom: 1px solid black;
+}
+
+.partitionsexecution table thead tr td {
+    width: 120px;
+}
+
+.partitionsexecution table tbody {
+    line-height: 20px;
+}
+
+.partitionsexecution table tbody tr:nth-child(even) {
+    background: #d5dbe1;
+}
+
+.partitionexecutionmetriclink {
+    color: dodgerblue;
+    text-decoration: underline;
+}
+
+.partitionexecutionmetriclink:hover{
+    cursor: pointer;
+}
+
+.partitionexecutionmetriclink::after{
+    content: ' View';
 }

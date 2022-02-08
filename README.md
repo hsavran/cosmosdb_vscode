@@ -2,7 +2,7 @@
 
 You can query Azure Cosmos DB SQL API by using VS Code now. Extension displays Execution Metrics, Indexing Policies and Overall Information about selected database and container.
 
-![Cosmos DB SQL Studio](images/azuresqleditor.gif)
+![Cosmos DB SQL Studio](https://github.com/hsavran/CosmosDB/raw/master/azuresqleditor.gif)
 
 ## Features
 
@@ -24,7 +24,7 @@ You can query Azure Cosmos DB SQL API by using VS Code now. Extension displays E
     * Free Tier information
     * Database's Backup Type
 
-![feature X](images/overall.png)
+![feature X](https://github.com/hsavran/CosmosDB/raw/master/overall.png)
 
 ## Release Notes
 
@@ -35,3 +35,10 @@ I hope you will enjoy to query Cosmos DB SQL API from VS Code.
  v
 Initial release of Cosmos DB Studio.
 F5 Executes queries. VS Code environment menu comes up with F5 events too.
+
+### 0.0.20
+Display number of physical partitions
+Display Execution metrics for each physical partition
+
+
+![feature X](https://raw.githubusercontent.com/hsavran/CosmosDB/master/partmetrics.PNG)
