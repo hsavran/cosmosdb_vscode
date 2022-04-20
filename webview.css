@@ -1,20 +1,176 @@
+html{
+    --vscode-scrollbarSlider-background:white !important;
+    --vscode-scrollbarSlider-hoverBackground: lawngreen !important;
+    --vscode-scrollbarSlider-activeBackground:springgreen !important;
+}
+
+a:focus, input:focus, select:focus, textarea:focus{
+    outline: none;
+    outline-offset: 0;
+}
 body{
     background: #404040;
     margin:0;
     padding:0 2px;
     font-family: Verdana, Geneva, Tahoma, sans-serif;
+    
 }
 .maingridcontainer{
     display:  grid;
-    grid-template-rows: 40px  200px 30px calc(100vh - 280px);
+    grid-template-rows: 40px  200px 30px 30px calc(100vh - 300px);
 }
 
 .containergriditem{
-    width:100vw;
+    
+}
+
+.containertablinks{
+    display: flex;    
+}
+
+.toggle1{
+    background: gray;
+    border-radius: 5px;
+    border:1px solid black;
+    align-self: center;
+    padding: 2px 5px;    
+    cursor: pointer;
+}
+
+.toggle1selected{
+    background: lawngreen;
+    box-shadow: 0 0 5px forestgreen;
+    transition: all 1s;
+}
+
+.tablink{
+    min-width: 100px;
+    background: linear-gradient(145deg, gainsboro, white, lightgray, white);
+    margin: 3px 2px 0 2px;    
+    border-top-left-radius: 4px;
+    border-top-right-radius: 10px;
+    vertical-align: bottom;
+    padding: 6px 30px 0 5px;
+    font-variant: small-caps;
+    border: 1px solid black;
+    color: black;
+    font-weight: bold;        
+}
+
+.tablink:hover{
+    cursor:pointer;
+    background: linear-gradient(45deg, steelblue, skyblue, dodgerblue);
+    transition: all 1s;
+    color: white;
+    text-shadow: 0 0 2px black;
+}
+
+.selectedtablink {
+    background: linear-gradient(45deg, forestgreen, seagreen,lawngreen) !important;
+    transition: all 1s;
+    color:white;
+    text-shadow: 0 0 2px black;
+}
+
+.indexingmetricsholder{
+    display:flex;
+    justify-content: center;
+    height: 100%;
+}
+
+.indexingmetricsholder table{
+    width: 99%;
+    margin:auto;
+    line-height: 30px;
+    font-size: 103%;
+    border-collapse: collapse;
+}
+
+.indexingmetricsholder table thead{
+    text-shadow: 1px 1px 5px black;
+    background: linear-gradient(5deg, #404040, dimgray, #404040);
+    font-weight: bold;
+}
+
+.indexingmetricsholder table tbody tr {
+    border-bottom: 1px solid gainsboro;
+    background: white;
+    color:black;
+}
+
+.indexingmetricsholder table tbody tr:nth-child(even){
+    background: whitesmoke;
+    color:black;
+}
+
+.indexingmetricssection{
+    width: 50%;
+    text-align: center;    
+}
+
+.indexingmetricsmaintitle{
+    background: black;
+    font-weight: bold;
+    display: block;
+    letter-spacing: 1px;
+    font-size: 100%;    
+    color: gold;
+    padding: 3px 0;
+    font-variant: small-caps;
+    text-shadow: 0 0 2px black;
+}
+
+.indexingseperator{
+    width:10px;
+    background: linear-gradient(to left, gray, gainsboro, azure);
+}
+
+.indexingmetricitembox{
+    text-align: left;
+    border: 1px solid gray;    
+    margin: 10px auto;
+    border-radius: 4px;
+    background: #102030;
+    width:90%;
+    display:flex;
+    justify-content: space-between;
+    padding: 15px;
+    align-items: center;
+}
+
+.indexingmetricitemindicator{
+    font-size: 90%;
+    font-variant: small-caps;    
+    color: black;
+    border-radius: 3px;    
+    padding: 3px 10px;    
+    box-shadow: 0 0 3px white;    
+    letter-spacing: 1px;
+    min-width: 60px;
+    text-align: center;
+    text-shadow: 0 0 1px black;
+}
+
+
+.indexingmetricstext{
+    letter-spacing: 1px;
+    display:flex;
+    flex-direction: column;
+    line-height: 20px;
+}
+
+.greengradient1{
+    background: linear-gradient(45deg, lawngreen, springgreen, forestgreen);
+}
+
+.redgradient1{
+    background: linear-gradient(45deg, red, rgb(214, 30, 30), orangered);
+    color:white;
+    text-shadow: 0 0 2px black;
 }
 
 .connectcontainer{                
-    background: #101525;
+    background: #152025;
     display: flex;
     justify-content: space-around;    
     align-items: center;
@@ -27,11 +183,15 @@ body{
 
 .connectcontainer label{            
     font-size:13px;
+    font-variant: small-caps;
 }
 
 .connectcontainer select {
     width: 150px;
-    padding: 3px;
+    padding: 7px 3px;
+    box-shadow: 0 0px 12px black;
+    border: 1px solid black;
+    border-radius: 5px;
 }
 
 .querycontainer{
@@ -45,8 +205,8 @@ body{
     display: flex; 
     justify-content: space-around;
     align-items: center;
-    color: linen;
-    text-shadow: 0 0 2px black;
+    color: white;
+    font-variant: small-caps;
 }
 
 .summarycontainer > article{
@@ -74,16 +234,34 @@ body{
     flex-wrap: wrap;
 }
 
-.queryresults{
-    width: calc(100vw - 350px);
+.whitebackground{
+    background: white !important;
+}
+
+.indexingresults{   
+    display: none;
+    color:white;
+}
+
+.resultsbox{
+    width: calc(100vw - 360px);
     flex-grow:1;
-    height:calc(100vh - 290px);
+    height:calc(100vh - 302px);
     overflow-y: auto;
+}
+
+.spatialresults{
+    display: none;
+}
+
+.cosmosmap{
+    width: 100%;
+    height: 100%;
 }
 
 .queryoptionresults {
     width: 300px;
-    height: calc(100vh - 293px);
+  
     padding: 10px 0 0 0;
     /* background: linear-gradient(50deg, #E6F3FB, lightblue); */
     color: black;
@@ -135,6 +313,29 @@ body{
     border-bottom: 1px solid black;
 }
 
+.compositeIndexholder{
+    display:flex;    
+    flex-direction: column;
+    border-top: 1px solid gray;
+}
+
+.compositeIndexholder:nth-child(even)
+{
+    background: gainsboro;
+}
+
+.compositeindexitem{
+display: flex;
+justify-content: flex-end;
+}
+
+
+
+.compositeindexitemorder{
+    width:50px;
+    text-align: right;
+}
+
 .MetricsTabs{
     width: 40px;
     color:white;
@@ -143,7 +344,7 @@ body{
     justify-content: flex-end;
     align-content: flex-start;
     flex-wrap: wrap;                
-    background:#101020;
+    background:linear-gradient(to left, #2f4c4b, #2b2b44);
 }
 
 .metricstablink{
@@ -154,7 +355,7 @@ body{
         padding: 5px 10px;
         height: 120px;
         text-align: center;
-        background: linear-gradient(to left, #102031, #203040);
+        background: radial-gradient(black, #003e02);
 }
 
 .metricstablink:hover{
@@ -191,22 +392,31 @@ body{
 }
 
 .commandbutton{
-    background: aliceblue;
-    padding: 4px 5px;
-    border-radius: 3px;
+    background: linear-gradient(200deg, aliceblue, whitesmoke,gainsboro, whitesmoke, aliceblue);
+    padding: 7px 5px;
+    border-radius: 8px;
     color:black;
-    bordeR:1px solid black;    
+    bordeR:1px solid black;
+    box-shadow: 0 0 2px whitesmoke;
 }
 
-.pointreadbox{
-    padding: 4px 5px !important;
-    border: 1px solid gray;
-    background: white;
-    color:black;
+.commandbutton:hover{    
+    border: 1px solid forestgreen;
+    cursor:pointer;
+    background: springgreen !important;
+}
+
+.pointreadbox {
+    border-right: 1px solid white;
+    padding: 8px 5px !important;    
+    color: white;
+    background: black;
+    border-left: 1px solid white;
+    box-shadow: 0 0 15px skyblue;
 }
 
 .pointreadbox>label{
-    text-shadow: 0 0 1px navy;
+    text-shadow: 0 0 1px darkslateblue;
 }
 
 .pointreadbox>input[type='button']{
@@ -280,4 +490,28 @@ body{
 
 .partitionexecutionmetriclink::after{
     content: ' View';
+}
+
+.optionstbox{
+    border-radius: 4px;
+    border:1px solid black;
+    padding: 3px 0;
+    text-indent: 5px;
+}
+
+.loadingquerybox{    
+        text-align: center;
+        width: 250px;
+        background: linear-gradient(45deg, dimgray, gray, dimgray);
+        border-radius: 50px;
+}
+
+.loadingqueryboxtext {
+    text-align: center;
+    font-size: 15px;
+    font-weight: bold;
+    font-variant: small-caps;
+    letter-spacing: 2px;
+    color: azure;
+    text-shadow: 1px 1px 1px black;
 }

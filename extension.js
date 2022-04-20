@@ -1,10 +1,14 @@
 const vscode = require('vscode');
+//const geoj = require('geojson-validation');
 const path = require('path');
 const { CosmosClient } = require('@azure/cosmos');
 const { CosmosDBManagementClient } = require("@azure/arm-cosmosdb");
 const { DefaultAzureCredential } = require("@azure/identity");
 const { ResourceManagementClient } = require('@azure/arm-resources');
 const { SubscriptionClient } = require("@azure/arm-subscriptions");
+const cryptobase = require('crypto-js');
+const cryptoJs = require('crypto-js');
+const fetch = require('node-fetch');
 var cosmosClient;
 const creds = new DefaultAzureCredential();
 creds.getToken();
@@ -19,6 +23,15 @@ var myAzure ={
 	accounts:[],
 	dbs:[],
 	cstring:[]
+};
+var pkeyranges = {
+	dbname: null,
+	container:null,
+	partitions:undefined
+}
+
+var lastindexingmetrics = {
+	db:'', container:'', queryhash:'', result:{}
 };
 
 async function GetSubscriptons(){	
@@ -191,9 +204,22 @@ async function activate(context) {
 					path.join(context.extensionPath,'/customJs/src-min-noconflict/ext-language_tools.js')
 				);
 				var js5loc = panel.webview.asWebviewUri(sqljs3);
+				/*
+				const leafjs = vscode.Uri.file(
+					path.join(context.extensionPath,'/node_modules/leaflet/dist/leaflet.js')
+				);
+				var j6loc = panel.webview.asWebviewUri(leafjs);
+				const leafmap = vscode.Uri.file(
+					path.join(context.extensionPath,'/node_modules/leaflet/dist/leaflet.js.map')
+				);
+				var j7loc = panel.webview.asWebviewUri(leafmap);
+				const leafcs = vscode.Uri.file(
+					path.join(context.extensionPath,'/node_modules/leaflet/dist/leaflet.css')
+				);				
+				var css2loc = panel.webview.asWebviewUri(leafcs);*/
 
 
-				panel.webview.html = getWebviewContent(js1loc,js2loc,js3loc,js4loc,js5loc,css1loc);
+				panel.webview.html = getWebviewContent(js1loc,js2loc,js3loc,js4loc,js5loc, css1loc);
 
 				panel.webview.onDidReceiveMessage(
 					async message => {
@@ -241,6 +267,10 @@ async function activate(context) {
 								cosmosClient = new CosmosClient(message.conn);
 								GetDatabases2();
 								break;
+							case 'findpartitions':
+								var partitions = await FindPhysicalPartitions(message.conf.db, message.conf.cont);
+								panel.webview.postMessage({command:"physicalpartitions", jsonData: partitions});								
+								break;
 						}
 					},
 					undefined,
@@ -258,11 +288,19 @@ function getWebviewContent(js1,js2,js3,js4,js5,css1){
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
 		<title>Cosmos DB SQL</title>
 		<link rel="stylesheet" href='` + css1 +`'/>
+		<link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+		integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A=="
+		crossorigin=""/>
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />		
 		<script src='` + js1 +`'></script>
 		<script src='` + js2 +`'></script>
 		<script src='` + js3 +`'></script>
 		<script src='` + js4 +`'></script>
 		<script src='` + js5 +`'></script>
+		<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"
+   integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA=="
+   crossorigin=""></script>
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 	</head>
 	<body>
         <div class="maingridcontainer">
@@ -270,14 +308,15 @@ function getWebviewContent(js1,js2,js3,js4,js5,css1){
                 <div>
                     <label>Database : </label>
                     <select id="cosmosdblist">
-                        <option>Select one</option>
+                        <option value="-1">Select one</option>
                     </select>
                 </div>
                 <div>
                     <label>Container :</label>
-                    <select id="cosmoscontainers"></select>
+                    <select id="cosmoscontainers"></select>					
+					<input type="button" id="PartitionListButton" disabled='disabled' title="Select Database and Container to see the list of physical partitions" value="Partition List" class="commandbutton"/>
                 </div>
-                <div>
+                <div>					
                     <input type="button" id="QueryOptionsButton" value="Options" class="commandbutton"/>
                     <input type="button" id="RunQuery" value="Execute" class="commandbutton"/>			
                 </div> 
@@ -304,8 +343,52 @@ function getWebviewContent(js1,js2,js3,js4,js5,css1){
                     <span id="queryitemcount">0</span>
                 </article>
             </div>
-            <div class="containergriditem bottomcontainer">
-                <div id="queryresults" class="queryresults"></div>
+			<div class="containergriditem containertablinks">
+				<div class='tablink selectedtablink' data-destination='queryresults'>Results</div>
+				<div class='tablink' data-destination='indexingresults' id='IndexingMetricstablink' style='display:none'>Indexing Metrics</div>
+				<div class='tablink' data-destination='spatialresults'>Map</div>
+				<div id='darkmodeToggle' style='position:fixed; right:10px;' class='toggle1 toggle1selected' data-flag='1'>Dark Mode</div>
+			</div>
+            <div id='bottomcontainer' class="containergriditem bottomcontainer">
+                <div id="queryresults" class="queryresults resultsbox"></div>
+				<div id="indexingresults" class="indexingresults resultsbox">
+					<div class="indexingmetricsholder">
+						<div class="indexingmetricssection">
+							<label class="indexingmetricsmaintitle">Utilized Indexes</label>
+							<div id="UtilizedIndexes"></div>
+							<table>
+								<thead>
+									<tr>
+										<td>Index Type</td>
+										<td>Index Path</td>
+										<td>Index Importance</td>
+									</tr>
+								</thead>
+								<tbody id='UtilizedIndexesTable'>
+								</tbody>
+							</table>
+						</div>
+						<div class="indexingseperator"></div>
+						<div class="indexingmetricssection">
+							<label class="indexingmetricsmaintitle">Potential Indexes</label>
+							<div id="PotentialIndexes"></div>
+							<table>
+								<thead>
+									<tr>
+										<td>Index Type</td>
+										<td>Index Path</td>
+										<td>Index Importance</td>
+									</tr>
+								</thead>
+								<tbody id='PotentialIndexesTable'>
+								</tbody>
+							</table>
+						</div>						
+					</div>				
+				</div>
+				<div id="spatialresults" class="resultsbox spatialresults">
+					<div id="cosmosmap" class="cosmosmap"></div>
+				</div>
 		        <div id="queryoptionresults" class="queryoptionresults">
 					<div id='OverallInformationBox' class='MetricsBox'>
 						<div class='section1'>Container</div>
@@ -352,13 +435,17 @@ function getWebviewContent(js1,js2,js3,js4,js5,css1){
                             <div>Mode</div>
                             <span id='indexingMode'></span>
                         </div>
+						<div class="samegroup">
+                            <div class="alignleft">Included Properties</div>
+                            <div id="includedPaths" style='font-weight:bold'></div>
+                        </div>
                         <div class="samegroup">
                             <div class="alignleft">Excluded Properties</div>
                             <div id="excludedPaths" style='font-weight:bold'></div>
-                        </div>		
-                        <div class="samegroup">
-                            <div class="alignleft">Included Properties</div>
-                            <div id="includedPaths" style='font-weight:bold'></div>
+                        </div>                        
+						<div class="samegroup">
+                            <div class="alignleft">Composite Properties</div>
+                            <div id="compositePaths" style='font-weight:bold'></div>
                         </div>
                         <div class="samegroup">
                             <div class="alignleft">Spatial Indexes</div>
@@ -497,54 +584,64 @@ function getWebviewContent(js1,js2,js3,js4,js5,css1){
 		<div style="padding:5px 0;">
             <input type='radio' id='connectByVs' name='connectoption'>
             <label for='connectByVs'>Connect by VsCode Azure Account</label>
-        </div>  
+        </div>  	
         <div style="padding:5px 0;">
             <input type="radio" id='connectBycstring' name='connectoption'/>
             <label for='connectBycstring'>Connect by a Connection String</label>
             <input id="cstringtxt" type="text" disabled="disabled" style="width:100%; margin: 3px 0 0 0">
         </div>              
         <div style="text-align: center;padding:5px 0 0 0;">
-            <input type='button' value="Connect" id='ConnectButton' >
+            <input type='button' value="Connect" id='ConnectButton' class='commandbutton' >
         </div>
     </dialog>
-    <dialog id='queryoptionsbox' class='loadDialog' style='width:fit-content; height:fit-content; text-align:left'>
-        <table>
-            <tbody>
-                <tr>
-                    <td colspan=2>
-                        <input type='checkbox' checked='checked' id='optionEnableQM' name='optionEnableQM'/>
-                        <label for='optionEnableQM' title='Use it for debugging slow or expensive queries'>Display Query Metrics</label>
-                    </td>				
-                </tr>
-				<tr>
-                    <td colspan=2>
-                        <input type='checkbox' id='optionForceQPlan' name='optionForceQPlan'/>
-                        <label for='optionForceQPlan' title='For queries like aggregates and most cross partition queries, this happens anyway. However, since the library doesn't know what type of query it is until we get back the first response, some optimization can't happen until later.'>Force Query Plan</label>
-                    </td>				
-                </tr>
-                <tr>
-                    <td>
-                    <label for='optionParellelism' title='The maximum number of concurrent operations that run client side during parallel query execution in the Azure Cosmos DB database service. Negative values make the system automatically decides the number of concurrent operations to run. Default: 0 (no parallelism)'>maxDegreeOfParallelism</label>
-                    </td>
-                    <td>
-                        <input type='number' id='optionParellelism' name='optionParellelism' min='-1' max='5' value='0' style='width:50px;'/>
-                    </td>
-                </tr>
-                <tr>
-                    <td>
-                        <label for='optionMaxItemCount' title='Max number of items to be returned in the enumeration operation. Default: undefined (server will defined payload) Expirimenting with this value can usually result in the biggest performance changes to the query.The smaller the item count, the faster the first result will be delivered (for non-aggregates). For larger amounts, it will take longer to serve the request, but you'll usually get better throughput for large queries (i.e. if you need 1000 items before you can do any other actions, set maxItemCount to 1000. If you can start doing work after the first 100, set maxItemCount to 100.)'>Force Query Plan</label>
-                    </td>
-                    <td>
-                        <input type='number' id='optionMaxItemCount' name='optionMaxItemCount' min='10' value='100' style='width:50px;'/>
-                    </td>
-                </tr>				
-                <tr>
-                    <td colspan=2 style='text-align:center'>
-                    <input type='button' value='Close' onclick='document.getElementById("queryoptionsbox").close();' />
-                    </td>
-                </tr>
-            </tbody>
-        </table>	
+    <dialog id='queryoptionsbox' class='loadDialog' style='width:550px; height:fit-content; text-align:left; padding-bottom: 5px;'>
+		<div style='display:flex;justify-content: space-between;line-height: 20px;'>
+			<div>
+				<div style='color:gold; padding 0 0 5px 0'>Query Engine Options</div>
+				<div>
+					<input type='checkbox' checked='checked' id='optionEnableQM' name='optionEnableQM'/>
+					<label for='optionEnableQM' title='Use it for debugging slow or expensive queries'>Display Query Metrics</label>
+				</div>
+				<div>
+					<input type='checkbox' id='optionEnableIndexingMetrics' name='optionEnableIndexingMetrics'/>
+					<label for='optionEnableIndexingMetrics' title='Use it to see Utilized and Suggested Indexes by Cosmos DB'>Display Indexing Metrics</label>
+				</div>
+				<div>
+					<input type='checkbox' id='optionForceQPlan' name='optionForceQPlan'/>
+					<label for='optionForceQPlan' title='For queries like aggregates and most cross partition queries, this happens anyway. However, since the library doesn't know what type of query it is until we get back the first response, some optimization can't happen until later.'>Force Query Plan</label>
+				</div>
+				<div>
+					<label for='optionMaxItemCount' title='Max number of items to be returned in the enumeration operation. Default: undefined (server will defined payload) Expirimenting with this value can usually result in the biggest performance changes to the query.The smaller the item count, the faster the first result will be delivered (for non-aggregates). For larger amounts, it will take longer to serve the request, but you'll usually get better throughput for large queries (i.e. if you need 1000 items before you can do any other actions, set maxItemCount to 1000. If you can start doing work after the first 100, set maxItemCount to 100.)'>Max Item Number</label>
+					<input type='number' id='optionMaxItemCount' name='optionMaxItemCount' min='10' value='100' style='width:50px;'  class='optionstbox'/>
+				</div>
+				<div>
+					<label for='optionParellelism' title='The maximum number of concurrent operations that run client side during parallel query execution in the Azure Cosmos DB database service. Negative values make the system automatically decides the number of concurrent operations to run. Default: 0 (no parallelism)'>Max Degree Of Parallelism</label>
+					<input type='number' id='optionParellelism' name='optionParellelism' min='-1' max='5' value='0'  class='optionstbox' style='width:50px;'/>
+				</div>
+			</div>
+			<div>
+				<div style='color:gold; padding: 0 0 5px 0'>Spatial Data Options</div>
+				<div>
+					<input type='checkbox' id='optionDisplaySpatialQ'/>
+					<label for='optionDisplaySpatialQ' title='Generated Queries will be displayed.'>Display Spatial queries</label>
+				</div>
+				<div>
+					<label for='maxspatialreturn'>Max Spatial Items to return</label>
+					<input class='optionstbox' type='number' id='maxspatialreturn' name='maxspatialreturn' value='100' style='width:50px;'/>
+				</div>
+				<div>
+					<label for='spatialprop'>Spatial Property to use in filter</label><br/>
+					<input type='text' id='spatialprop' name='spatialprop' value="Location" class='optionstbox' style='width:90%'></input>
+				</div>
+				<div>
+					<label for='spatialpropdraw'>Spatial Property to draw</label><br/>
+					<input type='text' id='spatialpropdraw' name='spatialpropdraw' value="Location" class='optionstbox' style='width:90%'></input>
+				</div>
+			</div>			
+		</div>
+		<div style='text-align:center; padding: 10px 0 0 0'>
+			<input type='button' class='commandbutton' value='Close' onclick='document.getElementById("queryoptionsbox").close();' />
+		</div>
     </dialog>
 	<dialog id='errorbox' class='errorbox'>
 	<table>
@@ -569,7 +666,7 @@ function getWebviewContent(js1,js2,js3,js4,js5,css1){
 	</tbody>
 	</table>		
 		<div style='text-align:center;padding: 15px 0 0 0'>
-			<input id='errorboxclosebutton' type='button' value='Close' onclick='document.getElementById("errorbox").close();'/>
+			<input id='errorboxclosebutton' class='commandbutton' type='button' value='Close' onclick='document.getElementById("errorbox").close();'/>
 		</div>
 	</dialog>
 	<dialog id='partitionsexecution' class='partitionsexecution'>
@@ -589,13 +686,60 @@ function getWebviewContent(js1,js2,js3,js4,js5,css1){
 			</tbody>
 		</table>
 		<div style='padding: 5px 0; text-align:center'>
-			<input type='button' id='partitionsexecutionclosebutton' value='Close'/>
+			<input type='button' class='commandbutton' id='partitionsexecutionclosebutton' value='Close'/>
 		</div>		
+	</dialog>
+	<dialog id='physicalpartitionsdialog' class='partitionsexecution' >
+		<table>
+			<thead>
+				<tr>
+					<td>Partition #</td>
+					<td>Status</td>
+					<td>Min Inclusive</td>
+					<td>Max Exclusive</td>
+					<td>Throughput Fraction</td>					
+				</tr>
+			</thead>
+			<tbody id='partitionlistrows'>				
+			</tbody>
+		</table>
+		<div style='padding: 5px 0; text-align:center'>
+			<input type='button' class='commandbutton' id='physicalpartitionsclosebutton' value='Close' onclick='document.getElementById("physicalpartitionsdialog").close();'/>
+		</div>
+	</dialog>
+	<dialog id='loadingquerybox' class='loadingquerybox'>
+	<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18" width="150px">
+		<defs>
+		<radialGradient id="a" cx="-105.006" cy="-10.409" r="5.954" gradientTransform="matrix(1.036 0 0 1.027 117.739 19.644)" gradientUnits="userSpaceOnUse">
+		<stop offset=".183" stop-color="#5ea0ef"/>
+		<stop offset="1" stop-color="#0078d4"/>
+		</radialGradient>
+		<clipPath id="b">
+		<path d="M14.969 7.53a6.137 6.137 0 11-7.395-4.543 6.137 6.137 0 017.395 4.543z" fill="none"/>
+		</clipPath>
+		</defs>
+		<path stroke='black' stroke-width='0.15%' d="M2.954 5.266a.175.175 0 01-.176-.176A2.012 2.012 0 00.769 3.081a.176.176 0 01-.176-.175.176.176 0 01.176-.176A2.012 2.012 0 002.778.72a.175.175 0 01.176-.176.175.175 0 01.176.176 2.012 2.012 0 002.009 2.009.175.175 0 01.176.176.175.175 0 01-.176.176A2.011 2.011 0 003.13 5.09a.177.177 0 01-.176.176zM15.611 17.456a.141.141 0 01-.141-.141 1.609 1.609 0 00-1.607-1.607.141.141 0 01-.141-.14.141.141 0 01.141-.141 1.608 1.608 0 001.607-1.607.141.141 0 01.141-.141.141.141 0 01.141.141 1.608 1.608 0 001.607 1.607.141.141 0 110 .282 1.609 1.609 0 00-1.607 1.607.141.141 0 01-.141.14z" fill="#50e6ff">
+		<animate attributeName='fill' values='lawngreen;deepskyblue' dur='4s' repeatCount='indefinite' />
+		</path>
+		<path d="M14.969 7.53a6.137 6.137 0 11-7.395-4.543 6.137 6.137 0 017.395 4.543z" fill="deepskyblue"/>
+		<g clip-path="url(#b)" fill="#f2f2f2">
+		<animate attributeName='fill' values='white;gainsboro;ghostwhite;azure' dur='5s' repeatCount='indefinite'/>
+		<path d="M5.709 13.115a1.638 1.638 0 10.005-3.275 1.307 1.307 0 00.007-.14A1.651 1.651 0 004.06 8.064H2.832a6.251 6.251 0 001.595 5.051zM15.045 7.815c0-.015 0-.03-.007-.044a5.978 5.978 0 00-1.406-2.88 1.825 1.825 0 00-.289-.09 1.806 1.806 0 00-2.3 1.663 2 2 0 00-.2-.013 1.737 1.737 0 00-.581 3.374 1.451 1.451 0 00.541.1h2.03a13.453 13.453 0 002.212-2.11z"/>
+		</g>
+		<path stroke='deepskyblue' stroke-width='0.25%' d="M17.191 3.832c-.629-1.047-2.1-1.455-4.155-1.149a14.606 14.606 0 00-2.082.452 6.456 6.456 0 011.528.767c.241-.053.483-.116.715-.151a7.49 7.49 0 011.103-.089 2.188 2.188 0 011.959.725c.383.638.06 1.729-.886 3a16.723 16.723 0 01-4.749 4.051A16.758 16.758 0 014.8 13.7c-1.564.234-2.682 0-3.065-.636s-.06-1.73.886-2.995c.117-.157.146-.234.279-.392a6.252 6.252 0 01.026-1.63 11.552 11.552 0 00-1.17 1.372C.517 11.076.181 12.566.809 13.613a3.165 3.165 0 002.9 1.249 8.434 8.434 0 001.251-.1 17.855 17.855 0 006.219-2.4A17.808 17.808 0 0016.24 8.03c1.243-1.661 1.579-3.15.951-4.198z" fill="#50e6ff">
+		<animate attributeName='fill' values='navy;midnightblue;black;midnightblue' dur='5s' repeatCount='indefinite'/>
+		</path>
+	</svg>
+	<div class='loadingqueryboxtext'>Loading...</div>
 	</dialog>
     </html>
 	<script>
 	const vscode = acquireVsCodeApi();
 	var editor;
+	var resultbox = new JSONFormatter('',2,{theme:'dark', hoverPreviewEnabled:true});
+	var cosmosmap;
+	var currentdata = null;
+	var drawnItems = new L.FeatureGroup();
 
 	document.addEventListener("DOMContentLoaded", function(event){
 		document.getElementById("connectionbox").showModal();
@@ -609,12 +753,56 @@ function getWebviewContent(js1,js2,js3,js4,js5,css1){
 				enableSnippets: true,
 				enableLiveAutocompletion: false
 			});
+			cosmosmap = L.map("cosmosmap").setView([30.35, -90.08], 7);
+    		L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        		maxZoom: 10,
+        		attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    		}).addTo(cosmosmap);			
+			cosmosmap.addLayer(drawnItems);
+			var drawControl = new L.Control.Draw({
+				draw:{
+					marker: false,
+					circle:false,
+					polyline:false,
+					circlemarker: false
+				},
+				edit: {
+					featureGroup : drawnItems,
+					edit:false
+				}
+			});
+			cosmosmap.addControl(drawControl);
+
+			cosmosmap.on(L.Draw.Event.CREATED, function(event){
+				AddItemToMap(event,drawnItems);
+			});
+
+			cosmosmap.on(L.Draw.Event.DELETED, function(event){				
+				RemoveItemsFromMap(event);
+			});
+			RenderQuery(null);
 	});
 
 	document.getElementById('ConnectionBoxLink').addEventListener("click", function(){
 		document.getElementById("authError").style.display = 'none';
 		document.getElementById("loadingbox").close();
 		document.getElementById("connectionbox").showModal();
+	});
+
+	document.getElementById("darkmodeToggle").addEventListener("click", function(){
+		var current = this.dataset.flag;
+		if (current == 1){
+			document.getElementById("darkmodeToggle").classList.remove('toggle1selected');
+			this.dataset.flag = 0;			
+			resultbox.config.theme='';
+			document.getElementById('bottomcontainer').classList.add('whitebackground');
+		} else{
+			document.getElementById("darkmodeToggle").classList.add('toggle1selected');
+			this.dataset.flag = 1;			
+			resultbox.config.theme='dark';
+			document.getElementById('bottomcontainer').classList.remove('whitebackground');
+		}
+		RenderQueryResults(currentdata);
 	});
 	
 	document.getElementById("RunQuery").addEventListener("click", function(){
@@ -626,8 +814,35 @@ function getWebviewContent(js1,js2,js3,js4,js5,css1){
 		PointRead();
 	});
 
+	var tablinks = document.getElementsByClassName("tablink");
+	Array.from(tablinks).forEach(function(element){
+		element.addEventListener('click', tablinkClicked);
+	});	
+
+	function tablinkClicked(e){
+		Array.from(tablinks).forEach(function(element){
+			element.classList.remove('selectedtablink');
+		});		
+		var destination = this.getAttribute("data-destination");
+		document.getElementById('queryresults').style.display = 'none';
+		document.getElementById('indexingresults').style.display = 'none';
+		document.getElementById('spatialresults').style.display = 'none';		
+		if (destination){
+			document.getElementById(destination).style.display = 'block';
+			this.classList.add('selectedtablink');
+		}
+		cosmosmap.invalidateSize();
+	}
+
 	document.getElementById("QueryOptionsButton").addEventListener("click", function(){
 		document.getElementById("queryoptionsbox").showModal();
+	});
+
+	document.getElementById("PartitionListButton").addEventListener("click", function(){
+		//document.getElementById("physicalpartitionsdialog").showModal();
+		var db = document.getElementById('cosmosdblist').value;
+		var container = document.getElementById("cosmoscontainers").value
+		FindPhysicalPartitions(db,container);
 	});
 
 	document.getElementById("partitionsexecutionclosebutton").addEventListener("click", function(){
@@ -678,6 +893,14 @@ function getWebviewContent(js1,js2,js3,js4,js5,css1){
 	document.getElementById("cosmoscontainers").addEventListener("change", function(){
 		ContainerChanged(this.value);
 	});
+
+	document.getElementById("optionEnableIndexingMetrics").addEventListener("change", function(){
+		if (this.checked){
+			document.getElementById("IndexingMetricstablink").style.display = 'block';
+		} else {
+			document.getElementById("IndexingMetricstablink").style.display ='none';
+		}
+	});
 	</script>
 	</body>
 	</html>`;
@@ -695,12 +918,18 @@ async function CreateNewDatabase(name){
 };
 
 async function ExecuteQuery(dbname, containerid, query, options){
+	var indexingmetrics= null;
+	if (options.populateIndexingMetrics){
+		indexingmetrics = await GetIndexMetrics(dbname, containerid, query);
+	}
+	//options.ConsistencyLevel = "Eventual";
 	const container = cosmosClient.database(dbname).container(containerid);	
 	const queryIterator = container.items.query(query, options);
 	let count = 0;
 	var cosmosResponse ={
 		result:[],
 		queryMetrics:[],
+		indexingMetrics: indexingmetrics,
 		charge:0,
 		count:0,
 		hasError: false,
@@ -826,6 +1055,9 @@ async function CreateQueryMetrics(pid, qmetrics){
 }
 
 async function TakeAverage(number, counter){
+	if (number == 0){
+		return 0;
+	}
 	return number / counter;
 }
 
@@ -868,8 +1100,111 @@ async function formatBytes(bytes,decimals =2){
 	return parseFloat((bytes / Math.pow(k,i)).toFixed(dm))+ ' ' + sizes[i];
 };
 
-async function ReadPartitions(){
-	//await cosmosArmClient.ReadPartitionKeyRangeFeedAsync()
+async function CreateRequiredHeadersforApi(action, dbname, containername, key, forquery, pkeyrangeid){
+	var now = new Date().toUTCString();	
+	var rtype = "pkranges";
+	if (forquery){
+		var rtype = "docs";
+	}
+	var rid = "dbs/" + dbname + "/colls/" + containername;
+	var text = (action || "").toLowerCase() + "\n" + (rtype || "").toLowerCase() + "\n" + (rid || "") + "\n" + now.toLowerCase() + "\n" + "" + "\n";
+	var key = cryptoJs.enc.Base64.parse(key);
+	var signature = cryptobase.HmacSHA256(text,key).toString(cryptoJs.enc.Base64);
+	var MasterToken = "master";
+	var TokenVersion = "1.0";
+	var authToken = encodeURIComponent("type=" + MasterToken + "&ver=" + TokenVersion + "&sig=" + signature);	
+	var headers = new fetch.Headers({
+		'authorization':authToken,
+		'x-ms-date':now,
+		'x-ms-version':'2018-12-31'
+		//'x-ms-cosmos-populateindexmetrics':true
+	});	
+	if (forquery){
+		headers.append('Content-Type','application/query+json');
+		headers.append('x-ms-documentdb-isquery', true);
+		headers.append('x-ms-documentdb-query-enablecrosspartition',true);
+		headers.append('x-ms-cosmos-populateindexmetrics',true);		
+	} else{
+		headers.append('Content-Type','application/json');
+	}
+	if (pkeyrangeid){
+		headers.append('x-ms-documentdb-partitionkeyrangeid',pkeyrangeid);
+	}
+	return headers;
+}
+
+async function FindPhysicalPartitions(dbname, containername){
+	var dt = cosmosClient.database(dbname);
+	var endpoint = dt.clientContext.cosmosClientOptions.endpoint;
+	var key = dt.clientContext.cosmosClientOptions.key;
+	var url = endpoint +"/dbs/" + dbname + "/colls/"+ containername + "/pkranges";
+	pkeyranges.dbname = dbname;
+	pkeyranges.container = containername;
+	pkeyranges.partitions = await fetch(url,
+	{
+		method: 'GET',
+		headers: await CreateRequiredHeadersforApi('GET', dbname, containername, key, false)		
+	}).then(response=>response.json());
+	return pkeyranges.partitions;
+}
+
+async function GetIndexMetrics(dbname, containername, query){
+	var hashed = await HashIt(query);
+	if (lastindexingmetrics.db == dbname && lastindexingmetrics.container == containername && lastindexingmetrics.result && lastindexingmetrics.queryhash == hashed){
+		return lastindexingmetrics.result;
+	} else {
+		lastindexingmetrics.db = dbname;
+		lastindexingmetrics.container = containername;
+		lastindexingmetrics.queryhash = await HashIt(query);
+	}	
+	var q ={
+		query:query,
+		parameters:[]
+	}	
+	var dt = cosmosClient.database(dbname);
+	var endpoint = dt.clientContext.cosmosClientOptions.endpoint;
+	var key = dt.clientContext.cosmosClientOptions.key;
+	var url = endpoint +"/dbs/" + dbname + "/colls/"+ containername + "/docs";
+	var pkeyrange = null;
+	if (pkeyranges.dbname == dbname && pkeyranges.container == containername && pkeyranges.partitions){
+		pkeyrange = pkeyranges.partitions.PartitionKeyRanges[0].id;
+	} else {
+		await FindPhysicalPartitions(dbname, containername);
+		pkeyrange = pkeyranges.partitions.PartitionKeyRanges[0].id;
+	}
+	lastindexingmetrics.result = null;
+	var response = await fetch(url,
+		{
+			method: 'POST',
+			headers: await CreateRequiredHeadersforApi('POST', dbname, containername, key, true,pkeyrange),
+			body: JSON.stringify(q)
+		}); //.then(response=>response.json());
+		//check the status to continue
+		if (response.ok){
+			var indexmetrics = response.headers.get('x-ms-cosmos-index-utilization');		
+			var result = Buffer.from(indexmetrics,'base64').toString();
+			lastindexingmetrics.result = JSON.parse(result);
+		}
+		
+	return lastindexingmetrics.result
+}
+
+async function CallAPI(dbname, containername, key){	
+	var q ={
+		query:"SELECT TOP 10 * FROM p WHERE p.PostId = 13486",
+		parameters:[]
+	}	
+	const test = await fetch('https://stackoverflow2013.documents.azure.com:443/dbs/Stackoverflow/colls/Posts/docs',
+	{
+		method: 'POST',
+		headers: await CreateRequiredHeadersforApi('POST', dbname, containername, true),		
+		body: JSON.stringify(q)			
+	});//.then(response=>response.json());
+
+}
+
+async function HashIt(value){	
+		return value.split("").reduce(function(a,b){a=((a<<5)-a)+b.charCodeAt(0);return a&a},0);	 
 }
 
 function deactivate() {}
