@@ -32,13 +32,31 @@ This is the first version of the tool.
 I hope you will enjoy to query Cosmos DB SQL API from VS Code.
 
 ### 0.0.1
- v
-Initial release of Cosmos DB Studio.
-F5 Executes queries. VS Code environment menu comes up with F5 events too.
+
+* Initial release of Cosmos DB Studio.
+* F5 Executes queries. VS Code environment menu comes up with F5 events too.
 
 ### 0.0.20
-Display number of physical partitions
-Display Execution metrics for each physical partition
+* Display number of physical partitions
+* Display Execution metrics for each physical partition
 
 
 ![feature X](https://raw.githubusercontent.com/hsavran/CosmosDB/master/partmetrics.PNG)
+
+### 0.0.22
+* Force Query Plan option is added to the Options.
+* List Physical Partitions functionality is added.
+
+### 0.0.25
+* Indexing Metrics is added to the Options
+
+### 0.0.30
+* Map view is added for Spatial Data types.
+* Users can search by drawing Rectangle and Polygon on map.
+* Spatial data type property should be defined in Option for Rectangle and Polygon search to work.
+
+### 0.0.35
+* Composite Indexes are added to Indexing Policy
+* White Background mode is added to Query Results
+* Indexing Metrics UI is redesigned
+* Options are rearranged.

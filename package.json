@@ -6,7 +6,7 @@
 	"author": {
 		"name": "Hasan Savran"
 	},
-	"version": "0.0.21",
+	"version": "0.0.30",
 	"engines": {
 		"vscode": "^1.60.0"
 	},
@@ -48,7 +48,12 @@
 		"@azure/keyvault-secrets": "^4.3.0",
 		"@azure/ms-rest-nodeauth": "^3.0.0",
 		"azure-arm-cosmosdb": "^2.3.0",
-		"json-formatter-js": "^2.3.4"
+		"crypto-js": "^4.1.1",
+		"geojson-validation": "^1.0.2",
+		"json-formatter-js": "^2.3.4",
+		"leaflet": "^1.7.1",
+		"leaflet-draw": "^1.0.4",
+		"node-fetch": "^2.6.7"
 	},
 	"scripts": {
 		"lint": "eslint .",
