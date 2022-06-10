@@ -5,6 +5,7 @@ var queryOptions = {
 	maxItemCount: undefined
 };
 var currentConnType = "";
+var myChart;
 
 function ExecuteQuery(querytxt){
 	var db = document.getElementById('cosmosdblist').value;
@@ -19,6 +20,9 @@ function ExecuteQuery(querytxt){
 			command: 'execute',
 			conf: {db:db, cont:container, q:querytxt, options: queryOptions}
 		});
+		if (myChart){
+			myChart.destroy();
+		}
 	} else{
 		document.getElementById('loadingquerybox').close();
 		DisplayErrorBox("Invalid Query");
@@ -518,7 +522,22 @@ function getDepthValue(obj, path, defaultValue) {
 	return getDepthValue(obj[current], props, defaultValue);
   }
 
-  function RenderQueryResults(data){	  
+function RenderQueryResults(data){
+	//debugger;
+	if (data && data.length){
+		var schema = Object.keys(data[0]);
+		if (schema){
+			var slc = document.getElementById("schemalist");
+			var slc2 = document.getElementById("timelineschemalist");
+			slc.innerHTML =  "";
+			slc2.innerHTML =  "";
+			for (var x=0; x<schema.length; x++){				
+				slc.appendChild(CreateOption(schema[x]));
+				slc2.appendChild(CreateOption(schema[x]));
+			}
+		}
+	}
+	
 		document.getElementById("queryresults").innerHTML ='';
 		var thm = '';
 		var theme = document.getElementById("darkmodeToggle").dataset.flag;	
@@ -527,7 +546,86 @@ function getDepthValue(obj, path, defaultValue) {
 		}	  
 		resultbox = new JSONFormatter(data,2,{theme:thm, hoverPreviewEnabled:true});
 	  	document.getElementById("queryresults").appendChild(resultbox.render());	
+	};
+
+	function CreateOption(txt,val){
+		var opt = document.createElement('option');
+		opt.innerHTML = txt;
+		if (!val){
+			val = txt;
+		}
+		opt.value = val;		
+		return opt;
 	}
+
+function TestChart(){
+	var propname = document.getElementById("schemalist").value;
+	var tline = document.getElementById("timelineschemalist").value;
+	var charttype = document.querySelector('input[name="charttype"]:checked').value;	
+	const ctx = document.getElementById('testchart').getContext('2d');
+	//debugger;	
+	var data2 = currentdata.map((element)=>{
+		if (!isNaN(element[propname]) && typeof element[propname] === 'number'){
+		return element[propname];
+		} else {
+			return 0;
+		}
+	});
+	var labels = data2;
+	if (tline){
+		labels = currentdata.map((element)=>{
+			
+			return element[tline];			
+		});
+	}
+	var min = Math.min(...data2);
+	document.getElementById("analyzemin").innerHTML = min;
+	var max = Math.max(...data2);
+	document.getElementById("analyzemax").innerHTML = max;
+	var avg = data2.reduce((a,b)=>a+b,0)/data2.length;
+	document.getElementById("analyzeavg").innerHTML = avg.toFixed(2);
+	if (myChart){
+		myChart.destroy();
+	}
+	myChart = new Chart(ctx, {
+		type: charttype,
+		data: {			
+			labels: labels,
+			datasets: [{
+				label: propname,
+				data: data2,
+				backgroundColor: CreateColors(data2.length),
+				borderColor: 'gray',
+				borderWidth: 1				
+			}]
+		},		
+		options: {
+			responsive: true,
+			maintainAspectRatio: false,
+			plugins: {
+				legend:{
+					display:false
+				}
+			}			
+		}
+	});
+};
+
+function CreateRandomColor(){
+	var r = Math.floor(Math.random() * 255);
+	var g = Math.floor(Math.random() * 255);
+	var b = Math.floor(Math.random() * 255);
+	return "rgba(" + r + "," + g + "," +b + ",0.5)";
+}
+
+function CreateColors(number){
+	var pool =[];
+	for (var i =0; i <number; i++){
+		pool.push(CreateRandomColor());
+	}
+	return pool;
+}
+
 
 	
 window.addEventListener('message', event => {

@@ -6,7 +6,7 @@
 	"author": {
 		"name": "Hasan Savran"
 	},
-	"version": "0.0.35",
+	"version": "0.0.37",
 	"engines": {
 		"vscode": "^1.60.0"
 	},
@@ -48,6 +48,7 @@
 		"@azure/keyvault-secrets": "^4.3.0",
 		"@azure/ms-rest-nodeauth": "^3.0.0",
 		"azure-arm-cosmosdb": "^2.3.0",
+		"chart.js": "^3.7.1",
 		"crypto-js": "^4.1.1",
 		"geojson-validation": "^1.0.2",
 		"json-formatter-js": "^2.3.4",

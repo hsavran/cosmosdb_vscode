@@ -1,7 +1,7 @@
 html{
     --vscode-scrollbarSlider-background:white !important;
-    --vscode-scrollbarSlider-hoverBackground: lawngreen !important;
-    --vscode-scrollbarSlider-activeBackground:springgreen !important;
+    --vscode-scrollbarSlider-hoverBackground: rgb(17, 54, 173) !important;
+    --vscode-scrollbarSlider-activeBackground:rgb(26, 23, 167) !important;
 }
 
 a:focus, input:focus, select:focus, textarea:focus{
@@ -254,9 +254,20 @@ body{
     display: none;
 }
 
+.analyzeresults{
+    display: none;
+}
+
 .cosmosmap{
     width: 100%;
     height: 100%;
+}
+
+.canvasholder{
+    position: relative;
+    width:99%;    
+    margin:auto;
+    height: calc(100vh - 381px);
 }
 
 .queryoptionresults {
@@ -276,8 +287,13 @@ body{
     padding: 0 0 0 5px;
 }
 
+.MetricsBox{
+    /*height: calc(100vh - 290px);*/
+    overflow:auto;
+}
+
 .MetricsBox > div {
-    padding:2px 7px;
+    padding:2px 7px;    
 }
 
 .samegroup{
@@ -514,4 +530,19 @@ justify-content: flex-end;
     letter-spacing: 2px;
     color: azure;
     text-shadow: 1px 1px 1px black;
+}
+
+.analyzeselect{
+    border: 1px solid gray;
+    padding: 5px;
+    font-weight: bold;
+    background: linear-gradient(45deg, ghostwhite, whitesmoke);
+}
+
+.analyzestat{
+    border:1px solid lightgray;
+    padding: 2px 15px;
+    border-radius: 5px;
+    background: linear-gradient(45deg, ghostwhite, whitesmoke);
+    font-variant: small-caps;
 }

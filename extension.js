@@ -28,7 +28,7 @@ var pkeyranges = {
 	dbname: null,
 	container:null,
 	partitions:undefined
-}
+};
 
 var lastindexingmetrics = {
 	db:'', container:'', queryhash:'', result:{}
@@ -204,6 +204,11 @@ async function activate(context) {
 					path.join(context.extensionPath,'/customJs/src-min-noconflict/ext-language_tools.js')
 				);
 				var js5loc = panel.webview.asWebviewUri(sqljs3);
+				
+				const chartjs = vscode.Uri.file(
+					path.join(context.extensionPath,'node_modules/chart.js/dist/chart.min.js')
+				);
+				var j6loc = panel.webview.asWebviewUri(chartjs);
 				/*
 				const leafjs = vscode.Uri.file(
 					path.join(context.extensionPath,'/node_modules/leaflet/dist/leaflet.js')
@@ -219,7 +224,7 @@ async function activate(context) {
 				var css2loc = panel.webview.asWebviewUri(leafcs);*/
 
 
-				panel.webview.html = getWebviewContent(js1loc,js2loc,js3loc,js4loc,js5loc, css1loc);
+				panel.webview.html = getWebviewContent(js1loc,js2loc,js3loc,js4loc,js5loc, j6loc, css1loc);
 
 				panel.webview.onDidReceiveMessage(
 					async message => {
@@ -280,7 +285,7 @@ async function activate(context) {
 	);	
 };
 
-function getWebviewContent(js1,js2,js3,js4,js5,css1){
+function getWebviewContent(js1,js2,js3,js4,js5,js6,css1){
 	return `<!DOCTYPE html>
 	<html lang="en">
 	<head>
@@ -297,6 +302,7 @@ function getWebviewContent(js1,js2,js3,js4,js5,css1){
 		<script src='` + js3 +`'></script>
 		<script src='` + js4 +`'></script>
 		<script src='` + js5 +`'></script>
+		<script src='` + js6 +`'></script>
 		<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"
    integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA=="
    crossorigin=""></script>
@@ -343,11 +349,12 @@ function getWebviewContent(js1,js2,js3,js4,js5,css1){
                     <span id="queryitemcount">0</span>
                 </article>
             </div>
-			<div class="containergriditem containertablinks">
+			<div class="containsergriditem containertablinks">
 				<div class='tablink selectedtablink' data-destination='queryresults'>Results</div>
 				<div class='tablink' data-destination='indexingresults' id='IndexingMetricstablink' style='display:none'>Indexing Metrics</div>
 				<div class='tablink' data-destination='spatialresults'>Map</div>
-				<div id='darkmodeToggle' style='position:fixed; right:10px;' class='toggle1 toggle1selected' data-flag='1'>Dark Mode</div>
+				<div class='tablink' data-destination='analyzeresults'>Analyzer</div>				
+				<div id='darkmodeToggle' style='position:fixed; right:10px;color:black' class='toggle1 toggle1selected' data-flag='1'>Dark Mode</div>
 			</div>
             <div id='bottomcontainer' class="containergriditem bottomcontainer">
                 <div id="queryresults" class="queryresults resultsbox"></div>
@@ -388,6 +395,50 @@ function getWebviewContent(js1,js2,js3,js4,js5,css1){
 				</div>
 				<div id="spatialresults" class="resultsbox spatialresults">
 					<div id="cosmosmap" class="cosmosmap"></div>
+				</div>
+				<div id="analyzeresults" class="resultsbox analyzeresults">
+					<div style="color:black">
+						<div style="display:flex; justify-content: space-around; align-items:center; padding: 5px 0 0 0; text-align:center; background: linear-gradient(45deg, gainsboro, lightgray, gainsboro); border-bottom: 1px solid gray">
+								<div>
+									<div>Property to analyze</div>
+									<div>
+										<select id="schemalist" class="analyzeselect">
+										<option>No Schema</option>
+										</select>
+									</div>
+								</div>
+								<div>
+									<div>Timeline property</div>
+									<div>
+									<select id="timelineschemalist" class="analyzeselect">
+									  <option>No Schema</option>
+									</select></div>
+								</div>
+								<div style='display:flex; justify-content:space-around; color:black;align-items:center'>
+									<div>
+										<input id='barcharttype' checked='checked' type='radio' name='charttype' value='bar' onchange='TestChart()' style='vertical-align:middle'/>
+										<label for='barcharttype' style='vertical-align:middle'>Bar Chart</label>
+									</div>
+									<div style='margin: 0 5px'>
+										<input id='linecharttype' type='radio' name='charttype' value='line' onchange='TestChart()' style='vertical-align:middle'/>
+										<label for='linecharttype' style='vertical-align:middle'>Line Chart</label>
+									</div>
+									<div>
+										<input id='piechartype' type='radio' name='charttype' value='doughnut' onchange='TestChart()' style='vertical-align:middle'/>
+										<label for='piechartype' style='vertical-align:middle'>Pie Chart</label>
+									</div>
+								</div>
+						</div>
+						
+						<div id="analyzer1" class="canvasholder" style='background:white'>
+							<canvas id='testchart' width='800' height='300'></canvas>
+						</div>
+						<div style="display:flex; justify-content:space-around; background: linear-gradient(45deg, gray, dimgray, gray,dimgray); padding: 3px 0; color:black">
+							<div class="analyzestat"> Min : <span id="analyzemin">0</span></div>
+							<div class="analyzestat"> Avg : <span id="analyzeavg">0</span></div>
+							<div class="analyzestat"> Max : <span id="analyzemax">0</span></div>
+						</div>
+					</div>
 				</div>
 		        <div id="queryoptionresults" class="queryoptionresults">
 					<div id='OverallInformationBox' class='MetricsBox'>
@@ -780,7 +831,9 @@ function getWebviewContent(js1,js2,js3,js4,js5,css1){
 			cosmosmap.on(L.Draw.Event.DELETED, function(event){				
 				RemoveItemsFromMap(event);
 			});
+			//TestChart();
 			RenderQuery(null);
+			
 	});
 
 	document.getElementById('ConnectionBoxLink').addEventListener("click", function(){
@@ -827,10 +880,16 @@ function getWebviewContent(js1,js2,js3,js4,js5,css1){
 		document.getElementById('queryresults').style.display = 'none';
 		document.getElementById('indexingresults').style.display = 'none';
 		document.getElementById('spatialresults').style.display = 'none';		
+		document.getElementById('analyzeresults').style.display = 'none';
 		if (destination){
 			document.getElementById(destination).style.display = 'block';
 			this.classList.add('selectedtablink');
-		}
+			if (destination == 'analyzeresults' || destination == 'spatialresults'){
+				document.getElementById("darkmodeToggle").style.display = 'none';
+			} else{
+				document.getElementById("darkmodeToggle").style.display = 'block';
+			}
+		}		
 		cosmosmap.invalidateSize();
 	}
 
@@ -855,7 +914,17 @@ function getWebviewContent(js1,js2,js3,js4,js5,css1){
 		} else{
 			document.getElementById("cstringtxt").disabled = true;
 		}
-	});	
+	});
+
+	document.getElementById("schemalist").addEventListener("change",function(){		
+		TestChart();
+	});
+
+	document.getElementById("timelineschemalist").addEventListener("change",function(){		
+		TestChart();
+	});
+
+	
 
 	document.getElementById("ConnectButton").addEventListener("click", function(){
 		var cstring = document.getElementById("connectBycstring").checked;
