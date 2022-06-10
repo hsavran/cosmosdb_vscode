@@ -1257,21 +1257,6 @@ async function GetIndexMetrics(dbname, containername, query){
 		
 	return lastindexingmetrics.result
 }
-
-async function CallAPI(dbname, containername, key){	
-	var q ={
-		query:"SELECT TOP 10 * FROM p WHERE p.PostId = 13486",
-		parameters:[]
-	}	
-	const test = await fetch('https://stackoverflow2013.documents.azure.com:443/dbs/Stackoverflow/colls/Posts/docs',
-	{
-		method: 'POST',
-		headers: await CreateRequiredHeadersforApi('POST', dbname, containername, true),		
-		body: JSON.stringify(q)			
-	});//.then(response=>response.json());
-
-}
-
 async function HashIt(value){	
 		return value.split("").reduce(function(a,b){a=((a<<5)-a)+b.charCodeAt(0);return a&a},0);	 
 }
