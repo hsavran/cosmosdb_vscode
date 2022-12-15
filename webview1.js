@@ -6,6 +6,14 @@ var queryOptions = {
 };
 var currentConnType = "";
 var myChart;
+var queryhistory=[];
+var currentquerytxt = "";
+var currentquery = {
+	querytxt:"",
+	querystats: {},
+	imetrics: {},
+	reexec :false
+}
 
 function ExecuteQuery(querytxt){
 	var db = document.getElementById('cosmosdblist').value;
@@ -29,28 +37,6 @@ function ExecuteQuery(querytxt){
 	}
 };
 
-function PointRead(){
-	var db = document.getElementById('cosmosdblist').value;
-    var container = document.getElementById('cosmoscontainers').value;
-	var id = document.getElementById('cosmosdbid').value;
-	var pkey = document.getElementById('cosmosdbpkey').value;
-	vscode.postMessage({
-		command: 'pointread',
-		conf: {id:id, pkey:pkey, db:db, cont:container}
-	});
-}
-	
-function AddDatabase(dbname){
-	if (dbname){
-		dbAccounts.push(dbname);	
-		var slc = document.getElementById('cosmosdblist');	
-		var opt = document.createElement('option');
-		opt.value = dbname.name;
-		opt.innerHTML = dbname.name;
-		slc.appendChild(opt);
-	}
-}; 
-
 function GetQueryOptions(){
 	queryOptions.populateQueryMetrics = document.getElementById('optionEnableQM').checked;
 	queryOptions.forceQueryPlan = document.getElementById('optionForceQPlan').checked;
@@ -62,10 +48,186 @@ function GetQueryOptions(){
 	} else {
 		queryOptions.maxItemCount = undefined;
 	}
-	
+	if (IsQueryAnalyzerRunning()){
+		queryOptions.populateIndexingMetrics = true;
+	}
 	//queryOptions.consistencyPolicy = "Eventual";
 	//queryOptions.populateQuotaInfo =true;	
 }
+
+function PointRead(){
+	var db = document.getElementById('cosmosdblist').value;
+    var container = document.getElementById('cosmoscontainers').value;
+	var id = document.getElementById('cosmosdbid').value;
+	var pkey = document.getElementById('cosmosdbpkey').value;
+	vscode.postMessage({
+		command: 'pointread',
+		conf: {id:id, pkey:pkey, db:db, cont:container}
+	});
+}
+
+function IsQueryAnalyzerRunning(){
+	return document.getElementById('QueryAnalyzerStatusButton').value == 'Pause';
+}
+
+function CreateQueryHistory(){
+	return {
+		query: currentquery.querytxt,
+		cost: Number(document.getElementById("queryrequnit").textContent),
+		docs: Number(document.getElementById("retrievedDocumentCount").textContent),
+		indexhit: Number(document.getElementById("indexHitDocumentCount").textContent),
+		ops: Number(document.getElementById("numberOfPartitions").textContent),
+		maxitemcount: queryOptions.maxItemCount,
+		indexlookup: Number(document.getElementById("indexHitLookupTime").textContent),
+		hasindexsuggestion: DoesQueryHavePotentialIndexes(),
+		indexsuggestions: GetPotentialIndexDescription(),
+		index: queryhistory? queryhistory.length +1 : 0 
+	};
+};
+
+function AddToQueryHistory(item){
+	if (item){		
+		queryhistory.push(item);
+	}
+};
+
+function HandleQueryAnalyzer(qstats){
+	//debugger;
+	//use redflag class for displaying
+	var main = CreateHTMLElement('div','TrialQuery',null, [{name:'data-seq', val: qstats.index}]);
+	var remove = CreateHTMLElement('span','TrialQueryRemove','X',[{name:'title',val:'Remove'},{name:'onclick', val:'RemoveQueryFromHistory('+qstats.index+')'}]);
+	var seq = CreateHTMLElement('span','TrialQuerySeq',qstats.index);
+	var title = CreateHTMLElement('div','TrialQueryTitle');
+	title.append(seq);
+	title.append(remove);
+	var stats = CreateHTMLElement('div','TrialQueryStats');
+	var cost = CreateHTMLElement('div',null, qstats.cost);
+	var docs = CreateHTMLElement('div',null, qstats.docs);
+	var ihit = CreateHTMLElement('div',null,qstats.indexhit);
+	if ((qstats.indexhit == 0 && qstats.docs >0) || (qstats.indexhit < qstats.docs)){
+		ihit.classList.add('redflag');
+		ihit.setAttribute('title','Index Hit should equal to Retrieved Docs. Check Index Suggestions.');
+	}
+	var ops = CreateHTMLElement('div',null,qstats.ops);
+	var mxcnt = CreateHTMLElement('div',null,qstats.maxitemcount);
+	var ilook = CreateHTMLElement('div',null,qstats.indexlookup);
+	if (qstats.indexhit == 0 && qstats.indexlookup == 0){
+		ilook.classList.add('redflag');
+		ilook.setAttribute('title','Query does not use any indexes. Check Index Suggestions.')
+	}
+	var indicator = '&#10008;'
+	if (qstats.hasindexsuggestion){
+		indicator = "&#10003;";
+	}
+	var ind = CreateHTMLElement('div',null,indicator);
+	var compattrs = [{name:'onclick', val:'CompareIsClicked(this)'},{name:'data-id', val:qstats.index}];
+	var comp = CreateHTMLElement('div','CompareButton','Compare', compattrs);
+	stats.append(cost);
+	stats.append(docs);
+	stats.append(ihit);
+	stats.append(ops);
+	stats.append(mxcnt);
+	stats.append(ilook);
+	stats.append(ind);
+	stats.append(comp);
+	main.append(title);
+	main.append(stats);
+	document.getElementById('queriestoanalyze').append(main);
+
+}
+
+function CreateHTMLElement(type, styleclass, val, attrs){
+	var temp = document.createElement(type);
+	if (styleclass){
+		temp.classList.add(styleclass);
+	}
+	if (val != undefined){
+		temp.innerHTML = val;
+	}
+	if (attrs){
+		for (var x=0; x< attrs.length; x++){
+			temp.setAttribute(attrs[x].name, attrs[x].val);
+		}
+	}	
+	return temp;
+}
+
+function CompareIsClicked(elem){	
+	var idtoload = elem.getAttribute('data-id');	
+	var querytocompare = queryhistory.filter(function(val){
+		return val.index == idtoload;
+	});
+	
+	if (querytocompare && querytocompare[0].query){
+		if (elem.classList.contains('CompareButtonSelected')){
+			elem.classList.remove('CompareButtonSelected');
+			document.getElementById('Selected'+querytocompare[0].index).remove();
+			//remove it
+		} else{
+			elem.classList.add('CompareButtonSelected');
+			document.getElementById('QueryComparison').append(CreateQueryComparisonRow(querytocompare));
+		}
+	}	
+}
+
+function CreateQueryComparisonRow(selected){
+	if (selected)
+	{
+		var row = CreateHTMLElement('div', 'QComparisonRow',null, [{name:'id', val: 'Selected' + selected[0].index},{ name:'data-result', val: 'true'}]);
+		var seq = CreateHTMLElement('div', 'QComparisonRowSeq', selected[0].index);
+		var play = CreateHTMLElement('div', 'playbutton',null, [{name:'onclick',val:'ReexecuteQuery(' + selected[0].index + ')'},{name:'Title', val:'Click to execute the query.'}]);
+		var qry = CreateHTMLElement('div', 'QComparisonRowQuery',selected[0].query);
+		var index = CreateHTMLElement('div', 'QComparisonRowIndex',selected[0].indexsuggestions);
+		row.append(seq);
+		row.append(play);
+		row.append(qry);
+		row.append(index);
+		return row;
+	}
+}
+
+function ReexecuteQuery(seq){	
+	var item = queryhistory.filter(function(val){
+		return val.index == seq;
+	});
+	if (item){
+		if (!document.getElementById('optionEnableIndexingMetrics').checked){
+			document.getElementById('optionEnableIndexingMetrics').click();
+		}
+		currentquery.reexec = true;
+		ExecuteQuery(item[0].query);
+	}
+}
+
+function RemoveQueryFromHistory(seq){	
+	if (seq && seq > 0){
+		queryhistory = queryhistory.filter(function(val){
+			return val.index != seq;
+		});
+		//var remove = document.querySelectorAll('.TrialQuery[data-seq="'+seq +'"]');
+		var remove = document.querySelectorAll('.TrialQuery');
+		remove.forEach(box=> {box.remove();});
+		var comp = document.getElementById('Selected'+seq);
+		if (comp){
+			comp.remove();
+		}
+	};
+	for (var i = 0; i< queryhistory.length; i++){
+		queryhistory[i].index = i+1;
+		HandleQueryAnalyzer(queryhistory[i]);
+	}
+}
+	
+function AddDatabase(dbname){
+	if (dbname){
+		dbAccounts.push(dbname);	
+		var slc = document.getElementById('cosmosdblist');	
+		var opt = document.createElement('option');
+		opt.value = dbname.name;
+		opt.innerHTML = dbname.name;
+		slc.appendChild(opt);
+	}
+};
 
 function ClearIndexingPolicy(){
 	document.getElementById("indexingMode").textContent = '';
@@ -79,6 +241,7 @@ function ClearExecutionMetrics(){
 	document.getElementById("documentLoadTime").textContent = '';
 	document.getElementById("documentWriteTime").textContent = '';
 	document.getElementById("indexHitDocumentCount").textContent = '';
+	document.getElementById("indexHitLookupTime").textContent = '';
 	document.getElementById("outputDocumentCount").textContent = '';
 	document.getElementById("outputDocumentSize").textContent = '';
 	document.getElementById("totalQueryExecutionTime").textContent = '';
@@ -217,18 +380,19 @@ function RenderDbOverall(dbname){
 
 function HandleInfoBoxes(dest){
 	var isOpen = document.getElementById(dest).style.display == 'block';
-	var metrics = document.getElementsByClassName('MetricsBox');
+	var metrics = document.querySelectorAll('.bottomcontainer .MetricsBox');	
 	for (var i=0; i<metrics.length; i++){
 		metrics.item(i).style.display='none';
-	}	
+	}
+	var closest = document.getElementById(dest).closest('.queryoptionresults');	
 	if (isOpen){
-		document.getElementById("queryoptionresults").style.visibility = '';
-		document.getElementById("queryoptionresults").style.display = 'none';
+		closest.style.visibility ='';
+		closest.style.display ='none';		
 		document.getElementById(dest).style.display = 'none';
 
 	} else {
-		document.getElementById("queryoptionresults").style.visibility = 'visible';
-		document.getElementById("queryoptionresults").style.display = 'block';
+		closest.style.visibility ='visible';
+		closest.style.display ='block';		
 		document.getElementById(dest).style.display = 'block';
 	}
 };
@@ -260,13 +424,22 @@ function HandleConnection(connectyBycstring){
 function HandleQueryExecution(){
 	GetQueryOptions();
 	ClearExecutionMetrics();
+	ClearCurrentQuery();
 	var query = editor.getValue();
 	var selected = editor.getSelectedText();
 	if (selected.length){
 		query = selected;
 	}
+	currentquery.querytxt = query;	
 	ExecuteQuery(query, queryOptions);
 };
+
+function ClearCurrentQuery (){
+	currentquery.querystats = {};
+	currentquery.imetrics = {};
+	currentquery.querytxt = "";
+	currentquery.reexec = false;
+}
 
 function FindPhysicalPartitions(db, container){
 	if (db && container){
@@ -374,10 +547,6 @@ function CreateIndexingMetricItemRow(data, itype){
 }
 
 function DisplayIndexingMetrics(data){	
-	//var utilized = document.getElementById("UtilizedIndexes");
-	//var potential = document.getElementById("PotentialIndexes");
-	//utilized.innerHTML = '';
-	//potential.innerHTML='';
 	var utilizedtable = document.getElementById('UtilizedIndexesTable');
 	var potentialtable = document.getElementById('PotentialIndexesTable');
 	utilizedtable.innerHTML = '';
@@ -430,9 +599,28 @@ function DisplayIndexingMetrics(data){
 			}
 		}
 	}
+}
 
+function DoesQueryHavePotentialIndexes(){
+	if (currentquery && currentquery.imetrics){
+		if ((currentquery.imetrics.PotentialSingleIndexes && currentquery.imetrics.PotentialSingleIndexes.length) || (currentquery.imetrics.PotentialCompositeIndexes && currentquery.imetrics.PotentialCompositeIndexes.length)){
+			return true;
+		}
+	}
+	return false;
+}
 
-
+function GetPotentialIndexDescription(){
+	var suggestions =[];
+	if (DoesQueryHavePotentialIndexes()){
+		if (currentquery.imetrics.PotentialSingleIndexes.length > 0){
+			suggestions.push(currentquery.imetrics.PotentialSingleIndexes.length + " Potential Single Index");
+		}
+		if (currentquery.imetrics.PotentialCompositeIndexes.length > 0){
+			suggestions.push(currentquery.imetrics.PotentialCompositeIndexes.length + " Potential Composite Index");					
+		}
+	}
+	return suggestions;
 }
 
 function DisplayErrorBox(msg, code, severity,location){
@@ -524,7 +712,7 @@ function getDepthValue(obj, path, defaultValue) {
 
 function RenderQueryResults(data){
 	//debugger;
-	if (data && data.length){
+	if (data && data.length && data[0] != null){
 		var schema = Object.keys(data[0]);
 		if (schema){
 			var slc = document.getElementById("schemalist");
@@ -548,7 +736,7 @@ function RenderQueryResults(data){
 	  	document.getElementById("queryresults").appendChild(resultbox.render());	
 	};
 
-	function CreateOption(txt,val){
+function CreateOption(txt,val){
 		var opt = document.createElement('option');
 		opt.innerHTML = txt;
 		if (!val){
@@ -625,8 +813,6 @@ function CreateColors(number){
 	}
 	return pool;
 }
-
-
 	
 window.addEventListener('message', event => {
 	const message = event.data;
@@ -636,7 +822,9 @@ window.addEventListener('message', event => {
 			//var result =JSON.stringify(message.response.result[0],null,2);
 			if (!message.response.hasError)
 			{
+				currentquery.querystats = message.response.qm;				
 				DisplayOnMap(message.response.result);
+				
 				document.getElementById("queryrequnit").textContent = message.response.charge.toFixed(2);            
 				RenderQueryResults(message.response.result);
 				//document.getElementById("queryresults").innerHTML ='';
@@ -644,77 +832,90 @@ window.addEventListener('message', event => {
 				currentdata = message.response.result;
 				//resultbox = new JSONFormatter(message.response.result,2,{theme:'dark', hoverPreviewEnabled:true});
 				//document.getElementById("queryresults").appendChild(resultbox.render());
-				document.getElementById("numberOfPartitions").textContent = message.response.qm.numberofpartition;
-				document.getElementById("queryitemcount").textContent =message.response.result.length;
-				document.getElementById("documentLoadTime").textContent = message.response.qm.documentLoadTime.toFixed(2);
-				document.getElementById("documentWriteTime").textContent = message.response.qm.documentWriteTime.toFixed(2);
-				document.getElementById("indexHitDocumentCount").textContent = message.response.qm.indexHitDocumentCount;
-				document.getElementById("outputDocumentCount").textContent = message.response.qm.outputDocumentCount;
-				document.getElementById("outputDocumentSize").textContent = message.response.qm.outputDocumentSize;
-				document.getElementById("totalQueryExecutionTime").textContent = message.response.qm.totalQueryExecutionTime.toFixed(2);
-				document.getElementById("logicalPlanBuildTime").textContent = message.response.qm.queryPreparationTimes.logicalPlanBuildTime.toFixed(2);
-				document.getElementById("physicalPlanBuildTime").textContent = message.response.qm.queryPreparationTimes.physicalPlanBuildTime.toFixed(2);
-				document.getElementById("queryCompilationTime").textContent = message.response.qm.queryPreparationTimes.queryCompilationTime.toFixed(2);
-				document.getElementById("queryOptimizationTime").textContent = message.response.qm.queryPreparationTimes.queryOptimizationTime.toFixed(2);
-				document.getElementById("retrievedDocumentSize").textContent = message.response.qm.retrievedDocumentSize;
-				document.getElementById("retrievedDocumentCount").textContent = message.response.qm.retrievedDocumentCount;			
-				document.getElementById("queryEngineExecutionTime").textContent = message.response.qm.runtimeExecutionTimes.queryEngineExecutionTime.toFixed(2);
-				document.getElementById("systemFunctionExecutionTime").textContent = message.response.qm.runtimeExecutionTimes.systemFunctionExecutionTime.toFixed(2);
-				document.getElementById("userDefinedFunctionExecutionTime").textContent = message.response.qm.runtimeExecutionTimes.userDefinedFunctionExecutionTime.toFixed(2);
-				document.getElementById("totalQueryExecutionTime").textContent = message.response.qm.totalQueryExecutionTime.toFixed(2);
-				document.getElementById("vmExecutionTime").textContent = message.response.qm.vmExecutionTime.toFixed(2);
+				document.getElementById("numberOfPartitions").textContent = message.response.requests;
+				document.getElementById("queryitemcount").textContent = message.response.result.length;
+				//result.length;
+				if (message.response.qm){
+					document.getElementById("documentLoadTime").textContent = message.response.qm.documentLoadTime.toFixed(2);
+					document.getElementById("indexHitLookupTime").textContent = message.response.qm.indexHitLookupTime.toFixed(2);
+					document.getElementById("documentWriteTime").textContent = message.response.qm.documentWriteTime.toFixed(2);
+					document.getElementById("indexHitDocumentCount").textContent = message.response.qm.indexHitDocumentCount;
+					document.getElementById("outputDocumentCount").textContent = message.response.qm.outputDocumentCount;
+					document.getElementById("outputDocumentSize").textContent = message.response.qm.outputDocumentSize;
+					document.getElementById("totalQueryExecutionTime").textContent = message.response.qm.totalQueryExecutionTime.toFixed(2);
+					document.getElementById("logicalPlanBuildTime").textContent = message.response.qm.queryPreparationTimes.logicalPlanBuildTime.toFixed(2);
+					document.getElementById("physicalPlanBuildTime").textContent = message.response.qm.queryPreparationTimes.physicalPlanBuildTime.toFixed(2);
+					document.getElementById("queryCompilationTime").textContent = message.response.qm.queryPreparationTimes.queryCompilationTime.toFixed(2);
+					document.getElementById("queryOptimizationTime").textContent = message.response.qm.queryPreparationTimes.queryOptimizationTime.toFixed(2);
+					document.getElementById("retrievedDocumentSize").textContent = message.response.qm.retrievedDocumentSize;
+					document.getElementById("retrievedDocumentCount").textContent = message.response.qm.retrievedDocumentCount;			
+					document.getElementById("queryEngineExecutionTime").textContent = message.response.qm.runtimeExecutionTimes.queryEngineExecutionTime.toFixed(2);
+					document.getElementById("systemFunctionExecutionTime").textContent = message.response.qm.runtimeExecutionTimes.systemFunctionExecutionTime.toFixed(2);
+					document.getElementById("userDefinedFunctionExecutionTime").textContent = message.response.qm.runtimeExecutionTimes.userDefinedFunctionExecutionTime.toFixed(2);
+					document.getElementById("totalQueryExecutionTime").textContent = message.response.qm.totalQueryExecutionTime.toFixed(2);
+					document.getElementById("vmExecutionTime").textContent = message.response.qm.vmExecutionTime.toFixed(2);
+				}
 				var rows = document.getElementById('partitionmetricsrows');
 				if (message.response.indexingMetrics){
+					currentquery.imetrics = message.response.indexingMetrics;
 					DisplayIndexingMetrics(message.response.indexingMetrics);
+				}
+				if (IsQueryAnalyzerRunning() && !currentquery.reexec){
+					var addtohistory = CreateQueryHistory();
+					AddToQueryHistory(addtohistory);
+					HandleQueryAnalyzer(addtohistory);
 				}
 				while (rows.hasChildNodes()){
 					rows.removeChild(rows.lastChild);
-				}
-				if (message.response.qms.length > 1){
+				}				
+				if (message.response.qms && message.response.qms.length > 1){
 					document.getElementById("numberOfPartitions").classList.add('partitionexecutionmetriclink');
 				} else{
 					document.getElementById("numberOfPartitions").classList.remove('partitionexecutionmetriclink');
 				}
-				for (var qm=0; qm < message.response.qms.length; qm++){
-					var tr = document.createElement('tr');
-					
-					var pid = document.createElement('td');
-					var pidtxt = document.createTextNode(message.response.qms[qm].partitionid);
-					pid.appendChild(pidtxt);
-					tr.appendChild(pid);
+				if (message.response.qms)
+				{
+					for (var qm=0; qm < message.response.qms.length; qm++){
+						var tr = document.createElement('tr');
+						
+						var pid = document.createElement('td');
+						var pidtxt = document.createTextNode(message.response.qms[qm].partitionid);
+						pid.appendChild(pidtxt);
+						tr.appendChild(pid);
 
-					var rdoc = document.createElement('td');
-					var rdoctxt = document.createTextNode(message.response.qms[qm].retrievedDocumentCount);
-					rdoc.appendChild(rdoctxt);
-					tr.appendChild(rdoc);
+						var rdoc = document.createElement('td');
+						var rdoctxt = document.createTextNode(message.response.qms[qm].retrievedDocumentCount);
+						rdoc.appendChild(rdoctxt);
+						tr.appendChild(rdoc);
 
-					var rsize = document.createElement('td');
-					var rsizetxt = document.createTextNode(message.response.qms[qm].retrievedDocumentSize);
-					rsize.appendChild(rsizetxt);
-					tr.appendChild(rsize);
+						var rsize = document.createElement('td');
+						var rsizetxt = document.createTextNode(message.response.qms[qm].retrievedDocumentSize);
+						rsize.appendChild(rsizetxt);
+						tr.appendChild(rsize);
 
-					var qe = document.createElement('td');
-					var qetxt = document.createTextNode(message.response.qms[qm].totalQueryExecutionTime.toFixed(2) + ' ms');
-					qe.appendChild(qetxt);
-					tr.appendChild(qe);
+						var qe = document.createElement('td');
+						var qetxt = document.createTextNode(message.response.qms[qm].totalQueryExecutionTime.toFixed(2) + ' ms');
+						qe.appendChild(qetxt);
+						tr.appendChild(qe);
 
-					var dload = document.createElement('td');
-					var dloadtxt = document.createTextNode(message.response.qms[qm].documentLoadTime.toFixed(2) + ' ms');
-					dload.appendChild(dloadtxt);
-					tr.appendChild(dload);
+						var dload = document.createElement('td');
+						var dloadtxt = document.createTextNode(message.response.qms[qm].documentLoadTime.toFixed(2) + ' ms');
+						dload.appendChild(dloadtxt);
+						tr.appendChild(dload);
 
-					var etime = document.createElement('td');
-					var etimetxt = document.createTextNode(message.response.qms[qm].vmExecutionTime.toFixed(2) + ' ms');
-					etime.appendChild(etimetxt);
-					tr.appendChild(etime);
+						var etime = document.createElement('td');
+						var etimetxt = document.createTextNode(message.response.qms[qm].vmExecutionTime.toFixed(2) + ' ms');
+						etime.appendChild(etimetxt);
+						tr.appendChild(etime);
 
-					var ru = document.createElement('td');
-					var rutxt = document.createTextNode(message.response.qms[qm].requestUnits);
-					ru.appendChild(rutxt);
-					tr.appendChild(ru);
-					var dest = document.getElementById('partitionmetricsrows');
-					dest.appendChild(tr);
-				}				
+						var ru = document.createElement('td');
+						var rutxt = document.createTextNode(message.response.qms[qm].requestUnits);
+						ru.appendChild(rutxt);
+						tr.appendChild(ru);
+						var dest = document.getElementById('partitionmetricsrows');
+						dest.appendChild(tr);
+					}
+				}
 			} else {				
 				if (message.response.error){
 					var msg;
