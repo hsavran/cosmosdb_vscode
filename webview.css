@@ -194,11 +194,19 @@ body{
     border-radius: 5px;
 }
 
-.querycontainer{
-    background: white;
-    font-size:18px;
-    
+.querycontainer{    
+    display: flex;
+    flex-wrap: wrap;    
 }
+
+.querysource{
+    font-size:18px;
+    width:calc(100vw - 360px);
+    height:100%;
+    flex-grow: 1;
+    background:white;
+}
+
 .summarycontainer{    
     background: #152025;    
     text-align: center;
@@ -258,6 +266,193 @@ body{
     display: none;
 }
 
+.qanalyzer{
+    display:none;
+    background:linear-gradient(to bottom,black, #40404a);
+}
+
+.queriestoanalyze{
+    display: flex;
+    background: linear-gradient(45deg, azure, ghostwhite, azure);
+}
+
+.TrialQueryDefs{
+    display:flex;
+    flex-direction: column;
+    width: 125px;
+    border-left: 1px solid gray;
+    border-right: 1px solid gray;
+    color:white;
+}
+
+.TrialQueryDefs div {    
+    border-bottom:1px solid black;
+    padding:1px 0;    
+    padding: 2px;
+    background: #446383;
+    text-shadow: 0 0 3px black;
+    font-variant: small-caps;
+}
+
+
+.TrialQuery{
+    display:flex;
+    flex-direction: column;
+    min-width:100px;
+    border-left: 1px solid gray;
+    border-right: 1px solid gray;
+}
+
+.TrialQuerySeq{
+    width: 88px;
+}
+
+.TrialQueryRemove{
+
+}
+
+.TrialQueryRemove:hover{
+    cursor: pointer;
+}
+
+.TrialQueryTitle{
+    background: #446383;
+    color: white;
+    text-align: center;
+    text-shadow: 1px 1px 1px black;
+    padding: 2px 0;
+    letter-spacing: 2px;
+    border-bottom:1px solid black;
+    display: flex;
+}
+
+.TrialQueryStats div{
+    border-bottom:1px solid black;    
+    background: whitesmoke;
+    padding: 2px;
+    text-align: center;
+    color:black;
+}
+
+.TrialQueryStats div:nth-child(even){
+    background:white;
+}
+
+.CompareButton{
+    background: dimgray !important;
+    color:white !important;
+    text-shadow: 1px 1px 1px black;;
+}
+
+.CompareButton:hover{
+    cursor: pointer;
+}
+
+.CompareButtonSelected{
+    background: lawngreen !important;
+    color:black !important;
+    text-shadow: none;
+    transition: all 1s;
+}
+
+.playbutton{
+    width: 21px;
+    color: navy;
+    background: azure;
+    text-align: center;
+    border-radius: 10px;
+    box-shadow: 0 0 5px black;
+    height: 18px;
+    margin: 0 5px 0 0;
+    border: 1px solid dimgray;
+}
+
+.playbutton:hover{
+    background: springgreen !important;
+}
+
+.playbutton::before{
+    content: '\25B6'
+}
+
+.QComparisonHolder{
+    width: 100%;
+}
+
+.QComparisonRowHeader{
+    background: linear-gradient(to bottom, #0a5078, #0f293c, #051a30) !important;
+    color: white;
+    margin: 5px 0 0 0;    
+    padding: 5px 0;
+    letter-spacing: 1px;
+    font-variant: small-caps;
+}
+
+.QComparisonRow{
+display:flex;
+border-bottom: 1px solid black;
+padding: 10px 5px;
+align-items: center;
+background: white;
+}
+
+.QComparisonRow:nth-child(even){
+    background: whitesmoke !important;
+}
+
+.QComparisonRowSeq{
+    width: 20px;
+    text-align: center;
+    background: lawngreen;
+    color:black;
+    border-radius:  20px;
+    padding: 3px;
+    margin:  0 10px 0 0;
+    box-shadow: 0 0 3px black;
+    border:1px solid dimgray;
+}
+
+.QComparisonRowQuery{
+width: 80%;
+color:black;
+}
+
+.QComparisonRowIndex{
+    width:20%;
+    text-align: center;
+}
+
+.QComparisonOptions{   
+    background: gainsboro;
+    padding: 3px 0;
+    border-bottom: 1px solid dimgray;
+    text-align: right;
+}
+
+.QComparisonOptions input{
+    background: dimgray;
+    color:white;
+    letter-spacing: 1px;
+    width:100px;
+    text-shadow: 1px 1px 1px black;
+    box-shadow: 0 0 5px dimgray;
+    margin: 0 5px;
+    border:1px solid black;
+    border-radius: 4px;
+}
+
+.QComparisonOptions input:hover{
+    border:1px solid white;    
+}
+
+
+.redflag {
+    background: radial-gradient(red, darkred) !important;
+    color:white !important;
+    text-shadow: 0 0 2px black;
+}
+
+
 .cosmosmap{
     width: 100%;
     height: 100%;
@@ -271,16 +466,14 @@ body{
 }
 
 .queryoptionresults {
-    width: 300px;
-  
-    padding: 10px 0 0 0;
-    /* background: linear-gradient(50deg, #E6F3FB, lightblue); */
+    width: 300px;    
     color: black;
     font-size: 12px;
     display: none;   
     background: linear-gradient(90deg, white, whitesmoke);
     border-left: 2px ridge gray;    
     line-height: 18px;
+    height: calc(100vh - 302px);
 }
 
 .headertxt{
@@ -288,8 +481,9 @@ body{
 }
 
 .MetricsBox{
-    /*height: calc(100vh - 290px);*/
+    display: none;
     overflow:auto;
+    height:100%;
 }
 
 .MetricsBox > div {
@@ -424,15 +618,23 @@ justify-content: flex-end;
 
 .pointreadbox {
     border-right: 1px solid white;
-    padding: 8px 5px !important;    
+    padding:5px 0 0 0;    
     color: white;
-    background: black;
-    border-left: 1px solid white;
-    box-shadow: 0 0 15px skyblue;
+    background: linear-gradient(to right, #404040, #505050, #404040);
+    border-left: 1px solid white;    
 }
 
-.pointreadbox>label{
-    text-shadow: 0 0 1px darkslateblue;
+.pointreadbox label{
+    font-weight: bold;
+    text-shadow: 0 0 3px black;;
+}
+
+.pointreadbox input[type='text']{        
+    padding: 5px 0;
+    border-radius: 3px;
+    border: none;
+    box-shadow: 0 0 5px black;
+    width:96%;
 }
 
 .pointreadbox>input[type='button']{

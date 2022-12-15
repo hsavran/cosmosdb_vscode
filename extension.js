@@ -169,13 +169,22 @@ console.log(result);
 async function activate(context) {
 	context.subscriptions.push(
 		vscode.commands.registerCommand('cosmosdb.openEditor', () => {
+			const columnToShownIn = vscode.window.activeTextEditor
+			? vscode.window.activeTextEditor.viewColumn
+			: undefined;
+			if (panel){
+				panel.reveal(columnToShownIn);
+			} else{				
+			
 			panel = vscode.window.createWebviewPanel(
 				'CosmosEditor', 
 				'Cosmos DB Studio', 
 				vscode.ViewColumn.One,
 				{
-					enableScripts: true
+					enableScripts: true,
+					retainContextWhenHidden:true
 				});
+			}
 				const js1 = vscode.Uri.file(
 					path.join(context.extensionPath,'webview1.js')
 				);
@@ -326,15 +335,27 @@ function getWebviewContent(js1,js2,js3,js4,js5,js6,css1){
                     <input type="button" id="QueryOptionsButton" value="Options" class="commandbutton"/>
                     <input type="button" id="RunQuery" value="Execute" class="commandbutton"/>			
                 </div> 
-                <div class="pointreadbox">
-                    <label id='cosmosdbpkeyname'>Partition Key :</label>
-                    <input id='cosmosdbpkey' type="text" style="width:70px;"/>
-                    <label>Id :<label>
-                    <input id='cosmosdbid' type="text" style="width:70px;"/>
-                    <input id='pointreadbutton' type="button" value="Point Read" class="commandbutton"/>
-                </div>
+                
             </div>
-            <div class="containergriditem querycontainer" id="querysource"></div>
+            <div class="containergriditem querycontainer">
+				<div id="querysource" class='querysource'></div>
+				<div class="queryoptionresults" style='height:100%'>
+					<div id='PointReadBox' class='MetricsBox pointreadbox'>
+						<div>
+							<label id='cosmosdbpkeyname'>Partition Key :</label>
+						</div>
+						<div><input id='cosmosdbpkey' type="text"/></div>
+						<div><label>Document Id<label></div>
+						<div><input id='cosmosdbid' type="text"/></div>
+						<div><input id='pointreadbutton' type="button" value="Point Read" class="commandbutton" /></div>
+					</div>
+				</div>
+				<div class="MetricsTabs">
+					<div class="metricstablink" id='PointReadLink' data-destination='PointReadBox'>
+						<span>Point Read</span>
+					</div>
+				</div>
+			</div>
             <div class="containergriditem summarycontainer">
                 <div style="display:flex; align-items:center; "> 			        
                     <svg id="logo" style="width: 25px " viewBox="0 0 510.504 510.504" class="footerlogo" xmlns="http://www.w3.org/2000/svg"><g><g><path d="m255.504.252c-98.131 0-158.574 55.347-158.741 55.441-3.787 17.481-10.374 42.85-10.374 61.465 0 140.833 118.763 254.972 259.596 254.972 60.017 0 115.159-27.944 158.719-62.639.178-1.087 5.801-23.477 5.801-54.239-.001-140.833-114.169-255-255.001-255z" fill="black"/><path d="m345.963 364.931c-140.833 0-255-114.167-255-255 0-18.615 2.013-36.757 5.801-54.239-.006.005-.011.01-.017.014-58.646 46.721-96.243 118.738-96.243 199.546 0 104.501 62.86 194.32 152.832 233.708l14.049-.266 11.895 9.97c24.07 7.53 49.673 11.588 76.225 11.588 64.87 0 124.517-24.357 169.79-64.757l59.311-78.143c8.886-18.141 15.693-37.527 20.099-57.862-43.561 34.696-98.726 55.441-158.742 55.441z" fill="black"/></g><g><path d="m403.824 178.498 80.769 44.341h-36.826l-27.392-13.117z" fill="black"/><path d="m403.824 178.498 43.943 44.341h-22.096z" fill="#ffa50a"/><path d="m229.151 100.013-56.669 65.102 36.469 17.885 109.702-17.885-50.164-65.102z" fill="#ffc305"/><path d="m487.941 325.953-15.14-26.908-39.662 18.257-32.891 53.766 25.047 74.427c24.439-21.809 44.689-48.292 59.311-78.143z" fill="#2896ff"/><path d="m459.149 274.783 13.652 24.262-72.554 72.023z" fill="#1e87dc"/><path d="m400.247 371.068 67.815-91.174-64.238-101.396h-85.862z" fill="#ff3c3c"/><path d="m318.653 165.115 81.594 205.953-144.193 5.063 12.284-73.381z" fill="#ffa50a"/><path d="m318.653 165.115-62.599 211.016-30.426 1.068z" fill="#fa870a"/><path d="m59.036 1.062-58.102 27.544-.934 28.781h47.531l18.019-21.169z" fill="#2896ff"/><path d="m59.036 1.062-11.505 56.325h30.203z" fill="#1e87dc"/><path d="m59.036 1.062 53.513 45.111 59.933 118.942-6.586 213.537-100.636-103.96z" fill="#64bc0f"/><path d="m153.335 488.96c8.42 3.686 17.078 6.93 25.944 9.704l139.374-333.548h-146.171z" fill="#6e64c3"/></g></g></svg>
@@ -353,7 +374,8 @@ function getWebviewContent(js1,js2,js3,js4,js5,js6,css1){
 				<div class='tablink selectedtablink' data-destination='queryresults'>Results</div>
 				<div class='tablink' data-destination='indexingresults' id='IndexingMetricstablink' style='display:none'>Indexing Metrics</div>
 				<div class='tablink' data-destination='spatialresults'>Map</div>
-				<div class='tablink' data-destination='analyzeresults'>Analyzer</div>				
+				<div class='tablink' data-destination='analyzeresults'>Data Analyzer</div>
+				<div class='tablink' data-destination='qanalyzer'>Query Analyzer</div>
 				<div id='darkmodeToggle' style='position:fixed; right:10px;color:black' class='toggle1 toggle1selected' data-flag='1'>Dark Mode</div>
 			</div>
             <div id='bottomcontainer' class="containergriditem bottomcontainer">
@@ -440,6 +462,32 @@ function getWebviewContent(js1,js2,js3,js4,js5,js6,css1){
 						</div>
 					</div>
 				</div>
+				<div id="qanalyzer" class="resultsbox qanalyzer">
+					<div>
+						<div class='QComparisonOptions'>
+							<input id='QueryAnalyzerStatusButton' type='button' value='Start'/>							
+							<input id='QueryAnalyzerClearButton' type='button' value='Clear'/>						
+						</div>
+						<div id="queriestoanalyze" class="queriestoanalyze">
+						<div class='TrialQueryDefs'>
+									<div>&nbsp</div>
+									<div>Cost(R/U)</div>
+									<div>Retrieved Docs</div>
+									<div>Index Hit</div>									
+									<div>Requests</div>
+									<div>Max Item Count</div>
+									<div>Index Lookup</div>
+									<div>Index Suggestion</div>								
+							</div>							
+						</div>
+						<div id='QueryComparison' class='QComparisonHolder'>
+							<div class='QComparisonRow QComparisonRowHeader' >
+								<div style='width:80%; text-align:center'>Query</div>
+								<div style='width:20%; text-align:center'>Potential Indexes</div>
+							</div>											
+						</div>
+					</div>					
+				</div>				
 		        <div id="queryoptionresults" class="queryoptionresults">
 					<div id='OverallInformationBox' class='MetricsBox'>
 						<div class='section1'>Container</div>
@@ -506,7 +554,7 @@ function getWebviewContent(js1,js2,js3,js4,js5,js6,css1){
                     <div id='ExecutionMetricsBox' class='MetricsBox'>
                         	<div class='samegroup'>
 								<div class='sameline'>			
-								<div>Number of Partitions</div>
+								<div>Number of Requests</div>
 								<span id='numberOfPartitions'></span>								
 							</div>
                              <div class='sameline'>			
@@ -591,7 +639,7 @@ function getWebviewContent(js1,js2,js3,js4,js5,js6,css1){
                  </div>
                 </div>
                 <div class='MetricsTabs'>
-				<div class="metricstablink" id='OverallLink' data-destination='OverallInformationBox'>
+					<div class="metricstablink" id='OverallLink' data-destination='OverallInformationBox'>
                         <span>Overall Info</span>				
                     </div>
                     <div class="metricstablink" id='ExecutionMetricsLink' data-destination='ExecutionMetricsBox'>
@@ -832,7 +880,7 @@ function getWebviewContent(js1,js2,js3,js4,js5,js6,css1){
 				RemoveItemsFromMap(event);
 			});
 			//TestChart();
-			RenderQuery(null);
+			RenderQueryResults(null);
 			
 	});
 
@@ -881,10 +929,11 @@ function getWebviewContent(js1,js2,js3,js4,js5,js6,css1){
 		document.getElementById('indexingresults').style.display = 'none';
 		document.getElementById('spatialresults').style.display = 'none';		
 		document.getElementById('analyzeresults').style.display = 'none';
+		document.getElementById('qanalyzer').style.display = 'none';		
 		if (destination){
 			document.getElementById(destination).style.display = 'block';
 			this.classList.add('selectedtablink');
-			if (destination == 'analyzeresults' || destination == 'spatialresults'){
+			if (destination == 'analyzeresults' || destination =='qanalyzer' || destination == 'spatialresults'){
 				document.getElementById("darkmodeToggle").style.display = 'none';
 			} else{
 				document.getElementById("darkmodeToggle").style.display = 'block';
@@ -900,7 +949,7 @@ function getWebviewContent(js1,js2,js3,js4,js5,js6,css1){
 	document.getElementById("PartitionListButton").addEventListener("click", function(){
 		//document.getElementById("physicalpartitionsdialog").showModal();
 		var db = document.getElementById('cosmosdblist').value;
-		var container = document.getElementById("cosmoscontainers").value
+		var container = document.getElementById("cosmoscontainers").value;
 		FindPhysicalPartitions(db,container);
 	});
 
@@ -922,13 +971,16 @@ function getWebviewContent(js1,js2,js3,js4,js5,js6,css1){
 
 	document.getElementById("timelineschemalist").addEventListener("change",function(){		
 		TestChart();
-	});
-
-	
+	});	
 
 	document.getElementById("ConnectButton").addEventListener("click", function(){
 		var cstring = document.getElementById("connectBycstring").checked;
 		HandleConnection(cstring);		
+	});
+
+	document.getElementById("PointReadLink").addEventListener("click", function(){
+		var dest = this.getAttribute('data-destination');
+		HandleInfoBoxes(dest);
 	});
 
 	document.getElementById("OverallLink").addEventListener("click", function(){
@@ -970,6 +1022,24 @@ function getWebviewContent(js1,js2,js3,js4,js5,js6,css1){
 			document.getElementById("IndexingMetricstablink").style.display ='none';
 		}
 	});
+
+	document.getElementById("QueryAnalyzerStatusButton").addEventListener("click", function(){
+		if (this.value == 'Start'){
+			this.value = 'Pause';
+			this.style.background='red';
+		} else{
+			this.value = 'Start';
+			this.style.background='seagreen';
+		}
+	});
+
+	document.getElementById("QueryAnalyzerClearButton").addEventListener("click", function(){
+		var temp = document.querySelectorAll('.TrialQuery');
+		temp.forEach(box => { box.remove();});
+		queryhistory = [];
+		var comparison = document.querySelectorAll('.QComparisonRow[data-result=true]');
+		comparison.forEach(res => {res.remove();});
+	});
 	</script>
 	</body>
 	</html>`;
@@ -986,23 +1056,16 @@ async function CreateNewDatabase(name){
 	}	
 };
 
-async function ExecuteQuery(dbname, containerid, query, options){
-	var indexingmetrics= null;
-	if (options.populateIndexingMetrics){
-		indexingmetrics = await GetIndexMetrics(dbname, containerid, query);
-	}
-	//options.ConsistencyLevel = "Eventual";
-	const container = cosmosClient.database(dbname).container(containerid);	
-	const queryIterator = container.items.query(query, options);
-	let count = 0;
-	var cosmosResponse ={
+async function CreateNewCosmosResponseObj(){
+	return {
 		result:[],
 		queryMetrics:[],
-		indexingMetrics: indexingmetrics,
+		indexingMetrics: {},
 		charge:0,
 		count:0,
 		hasError: false,
 		error: '',
+		requests:0,
 		qms:[],
 		qm:{
 			partitionid: 0,
@@ -1032,24 +1095,12 @@ async function ExecuteQuery(dbname, containerid, query, options){
 			requestUnits:0
 		}
 	};
-	try{
-	while (queryIterator.hasMoreResults() && count <= 100000) {	
-		const resources = await queryIterator.fetchNext();
-		cosmosResponse.charge += Number(resources.headers['x-ms-request-charge']);
-		cosmosResponse.result = cosmosResponse.result.concat(resources.resources);		
-		if (resources.queryMetrics){
-			for (const prop in resources.queryMetrics){				
-				if (resources.queryMetrics[prop]){
-					cosmosResponse.queryMetrics.push(resources.queryMetrics[prop]);
-					cosmosResponse.qms.push(await CreateQueryMetrics(prop, resources.queryMetrics[prop]));					
-				}
-			}			
-		}
-	}
-	
+}
+
+async function HandleQueryMetricsCalculation(cosmosResponse){
 	for (var q=0;q<cosmosResponse.queryMetrics.length; q++){
 		if (cosmosResponse.queryMetrics[q])		{
-			cosmosResponse.qm.documentLoadTime += cosmosResponse.queryMetrics[q].documentLoadTime._ticks / 10000;
+		cosmosResponse.qm.documentLoadTime += cosmosResponse.queryMetrics[q].documentLoadTime._ticks / 10000;
 		cosmosResponse.qm.documentWriteTime += cosmosResponse.queryMetrics[q].documentWriteTime._ticks / 10000;
 		cosmosResponse.qm.indexHitDocumentCount += cosmosResponse.queryMetrics[q].indexHitDocumentCount;
 		cosmosResponse.qm.indexHitLookupTime += cosmosResponse.queryMetrics[q].indexLookupTime._ticks / 10000;
@@ -1066,9 +1117,9 @@ async function ExecuteQuery(dbname, containerid, query, options){
 		cosmosResponse.qm.runtimeExecutionTimes.userDefinedFunctionExecutionTime += cosmosResponse.queryMetrics[q].runtimeExecutionTimes.userDefinedFunctionExecutionTime._ticks/10000;
 		cosmosResponse.qm.totalQueryExecutionTime += cosmosResponse.queryMetrics[q].totalQueryExecutionTime._ticks/10000;
 		cosmosResponse.qm.vmExecutionTime += cosmosResponse.queryMetrics[q].vmExecutionTime._ticks/10000;
-		}
-		
+		}		
 	}
+	cosmosResponse.qm.indexHitDocumentCount = cosmosResponse.qm.indexHitDocumentCount.toFixed(2);
 	cosmosResponse.qm.documentLoadTime = await TakeAverage(cosmosResponse.qm.documentLoadTime, cosmosResponse.queryMetrics.length);
 	cosmosResponse.qm.documentWriteTime = await TakeAverage(cosmosResponse.qm.documentWriteTime, cosmosResponse.queryMetrics.length);
 	cosmosResponse.qm.indexHitLookupTime = await TakeAverage(cosmosResponse.qm.indexHitLookupTime, cosmosResponse.queryMetrics.length);
@@ -1083,14 +1134,45 @@ async function ExecuteQuery(dbname, containerid, query, options){
 	cosmosResponse.qm.totalQueryExecutionTime = await TakeAverage(cosmosResponse.qm.totalQueryExecutionTime,cosmosResponse.queryMetrics.length);
 	cosmosResponse.qm.vmExecutionTime = await TakeAverage(cosmosResponse.qm.vmExecutionTime,cosmosResponse.queryMetrics.length);
 
-
-
-
 	cosmosResponse.qm.outputDocumentSize = await formatBytes(cosmosResponse.qm.outputDocumentSize);
 	cosmosResponse.qm.retrievedDocumentSize = await formatBytes(cosmosResponse.qm.retrievedDocumentSize);
 	cosmosResponse.count = cosmosResponse.result.length;
 	cosmosResponse.qm.numberofpartition = cosmosResponse.queryMetrics.length;
 	return cosmosResponse;
+}
+
+async function ExecuteQuery(dbname, containerid, query, options){
+	try{
+	var indexingmetrics= null;
+	if (options.populateIndexingMetrics){
+		indexingmetrics = await GetIndexMetrics(dbname, containerid, query);
+	}
+	//options.ConsistencyLevel = "Eventual";
+	const container = cosmosClient.database(dbname).container(containerid);	
+	const queryIterator = container.items.query(query, options);
+	let count = 0;
+	var cosmosResponse = await CreateNewCosmosResponseObj();
+	cosmosResponse.indexingMetrics = indexingmetrics;	
+	
+	while (queryIterator.hasMoreResults() && count <= 100000) {	
+		
+		const resources = await queryIterator.fetchNext();
+		/*if (resources.requestCharge > 0){
+			cosmosResponse.requests++;
+		}*/
+		cosmosResponse.charge += Number(resources.headers['x-ms-request-charge']);
+		cosmosResponse.result = cosmosResponse.result.concat(resources.resources);		
+		if (resources.queryMetrics){			
+			for (const prop in resources.queryMetrics){				
+				if (resources.queryMetrics[prop]){
+					cosmosResponse.requests++;
+					cosmosResponse.queryMetrics.push(resources.queryMetrics[prop]);
+					cosmosResponse.qms.push(await CreateQueryMetrics(prop, resources.queryMetrics[prop]));					
+				}
+			}			
+		}
+	}	
+	return await HandleQueryMetricsCalculation(cosmosResponse);	
 }
 	catch(e){
 		cosmosResponse.hasError = true;
@@ -1104,7 +1186,7 @@ async function CreateQueryMetrics(pid, qmetrics){
 		partitionid :pid,
 		documentLoadTime : qmetrics.documentLoadTime._ticks / 10000,
 		documentWriteTime : qmetrics.documentWriteTime._ticks / 10000,
-		indexHitDocumentCount : qmetrics.indexHitDocumentCount,
+		indexHitDocumentCount : qmetrics.indexHitDocumentCount.toFixed(2),
 		indexHitLookupTime : qmetrics.indexLookupTime._ticks / 10000,
 		outputDocumentCount : qmetrics.outputDocumentCount,
 		outputDocumentSize : await formatBytes(qmetrics.outputDocumentSize),
@@ -1121,7 +1203,7 @@ async function CreateQueryMetrics(pid, qmetrics){
 		vmExecutionTime : qmetrics.vmExecutionTime._ticks/10000,
 		requestUnits: qmetrics.clientSideMetrics.requestCharge
 	};
-}
+};
 
 async function TakeAverage(number, counter){
 	if (number == 0){
@@ -1241,7 +1323,7 @@ async function GetIndexMetrics(dbname, containername, query){
 		await FindPhysicalPartitions(dbname, containername);
 		pkeyrange = pkeyranges.partitions.PartitionKeyRanges[0].id;
 	}
-	lastindexingmetrics.result = null;
+	lastindexingmetrics.result = "N/A";
 	var response = await fetch(url,
 		{
 			method: 'POST',
@@ -1250,11 +1332,12 @@ async function GetIndexMetrics(dbname, containername, query){
 		}); //.then(response=>response.json());
 		//check the status to continue
 		if (response.ok){
-			var indexmetrics = response.headers.get('x-ms-cosmos-index-utilization');		
-			var result = Buffer.from(indexmetrics,'base64').toString();
-			lastindexingmetrics.result = JSON.parse(result);
-		}
-		
+			var indexmetrics = response.headers.get('x-ms-cosmos-index-utilization');
+			if (indexmetrics){
+				var result = Buffer.from(indexmetrics,'base64').toString();
+				lastindexingmetrics.result = JSON.parse(result);
+			}
+		}		
 	return lastindexingmetrics.result
 }
 async function HashIt(value){	

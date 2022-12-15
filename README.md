@@ -60,3 +60,25 @@ I hope you will enjoy to query Cosmos DB SQL API from VS Code.
 * White Background mode is added to Query Results
 * Indexing Metrics UI is redesigned
 * Options are rearranged.
+
+### 0.0.37
+* Data Analyzer tab is added.
+* Data Analyzer let user analyze the current data with basic charts and stats.
+
+### 0.0.38
+* Point Read functionality is moved to right side.
+* Query Analyzer tab is added.
+* Query Analyzer will track the queries, execution metrics and indexing metrics.
+* Users can compare queries by Compare button.
+
+### 0.0.39
+* Style bugs fixed.
+
+## 0.0.40
+* Execution Metrics for Point Read bug is fixed.
+* Index Lookup property bug is fixed.
+* Query Analyzer seq remove bug is fixed.
+* Query Analyzer Clear button bug is fixed.
+* Red style is fixed for warning rows
+* Index Hit Documents value is rounded to 2 decimals
+* Indexing Metrics bug is fixed.
