@@ -1,5 +1,5 @@
 html{
-    --vscode-scrollbarSlider-background:white !important;
+    --vscode-scrollbarSlider-background:dodgerblue !important;
     --vscode-scrollbarSlider-hoverBackground: rgb(17, 54, 173) !important;
     --vscode-scrollbarSlider-activeBackground:rgb(26, 23, 167) !important;
 }
@@ -734,6 +734,20 @@ justify-content: flex-end;
     text-shadow: 1px 1px 1px black;
 }
 
+.deletebox{
+    width: 800px;
+    box-shadow: 0 0 5px white;
+    padding: 0;
+}
+
+.deleteboxmissingmsg {
+    text-align: center;
+    border-bottom: 1px solid black;
+    color: firebrick;
+    font-weight: bold;
+    background-color: gainsboro;
+}
+
 .analyzeselect{
     border: 1px solid gray;
     padding: 5px;
@@ -747,4 +761,61 @@ justify-content: flex-end;
     border-radius: 5px;
     background: linear-gradient(45deg, ghostwhite, whitesmoke);
     font-variant: small-caps;
+}
+
+.scrolltable{
+    display: table;
+}
+
+.scrolltable thead{
+    font-size: 12px;
+    border-bottom: none !important;
+}
+
+.scrolltable thead, tr{
+    display: table;
+    table-layout: fixed;
+    width: 100%;
+    text-align: center;
+    border-bottom: 1px solid gray;
+}
+
+.scrolltable tbody{
+    display: block;
+    width:100%;
+    overflow-y: auto;
+}
+
+.scrolltable tbody tr:nth-child(even){
+    background-color: whitesmoke;
+}
+
+.width75px{
+    width: 75px;
+}
+
+.width80px{
+    width: 80px;
+}
+
+.buttonstyle2{
+    background: whitesmoke;
+    padding: 3px 5px;   
+    border-radius: 3px;
+    color: black;
+}
+
+.buttonstyle2:hover{
+    cursor:pointer;
+}
+
+.querytodeletebox{
+    background-color: #d9a9a9;
+    padding: 5px;
+    font-variant: small-caps;
+    border-bottom: 1px solid;
+}
+
+#deleteButton:hover{
+    cursor: pointer;
 }

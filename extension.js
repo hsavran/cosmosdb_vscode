@@ -3,15 +3,22 @@ const vscode = require('vscode');
 const path = require('path');
 const { CosmosClient } = require('@azure/cosmos');
 const { CosmosDBManagementClient } = require("@azure/arm-cosmosdb");
-const { DefaultAzureCredential } = require("@azure/identity");
+//const { DefaultAzureCredential } = require("@azure/identity");
+const { useIdentityPlugin, DefaultAzureCredential  } = require("@azure/identity");
+const { vsCodePlugin } = require("@azure/identity-vscode");
+useIdentityPlugin(vsCodePlugin);
+
 const { ResourceManagementClient } = require('@azure/arm-resources');
 const { SubscriptionClient } = require("@azure/arm-subscriptions");
 const cryptobase = require('crypto-js');
 const cryptoJs = require('crypto-js');
 const fetch = require('node-fetch');
 var cosmosClient;
+//const credential = new VisualStudioCodeCredential();
+//credential.getToken();
 const creds = new DefaultAzureCredential();
-creds.getToken();
+HandleToken();
+//creds.getToken();
 var subClient = new SubscriptionClient(creds);
 var resClient; //= new ResourceManagementClient(creds);
 var cosmosArmClient;// = new CosmosDBManagementClient(creds);
@@ -34,12 +41,25 @@ var lastindexingmetrics = {
 	db:'', container:'', queryhash:'', result:{}
 };
 
-async function GetSubscriptons(){	
+async function HandleToken(){
+	await creds.getToken(); //'https://login.microsoftonline.com/.default');
+}
+
+async function GetSubscriptons(){
+	/*try{
+		const credential = new VisualStudioCodeCredential();
+  		await credential.getToken(); //"https://login.microsoftonline.com/")
+	}
+	catch(ex){
+		console.log(ex);
+	}*/
+	//await credential.getToken('https://login.microsoftonline.com');
 	return subClient.subscriptions.list().then((result) => {
 		myAzure.subs = result;
 		return result;
-	}).catch((err) => {		
-	  	console.error(err);
+	}).catch((err) => {	
+		vscode.window.showErrorMessage(err.message);	
+	  	//console.error(err);
 	  	return null;
 	});
 };
@@ -250,9 +270,13 @@ async function activate(context) {
 								panel.webview.postMessage({command:'load', response:response});
 									break;
 							case 'init':								
-								await GetSubscriptons().then((subs) =>{	
-									panel.webview.postMessage({command:'subCount', jsonData: subs.length});																		
-									if (subs != null  & subs.length > 0){																				
+								await GetSubscriptons().then((subs) =>{
+									if (subs == null)	{
+										vscode.window.showErrorMessage('Azure Token is expired.');
+										panel.webview.postMessage({command:'openconnectionbox'});
+									}																											
+									if (subs != null  & subs.length > 0){		
+										panel.webview.postMessage({command:'subCount', jsonData: subs.length});																		
 										for (var s=0; s< subs.length; s++){
 											var sid = subs[s].subscriptionId;
 											cosmosArmClient = new CosmosDBManagementClient(creds, sid);	
@@ -274,7 +298,8 @@ async function activate(context) {
 										}
 									}
 								}, reason =>{
-									panel.webview.postMessage({command:"authfail", jsonData: reason});
+									panel.webview.postMessage({command:"openconnectionbox", jsonData: reason});
+									vscode.window.showErrorMessage(reason);
 								});							
 								break;
 							case 'cstring':
@@ -283,8 +308,15 @@ async function activate(context) {
 								break;
 							case 'findpartitions':
 								var partitions = await FindPhysicalPartitions(message.conf.db, message.conf.cont);
-								panel.webview.postMessage({command:"physicalpartitions", jsonData: partitions});								
+								panel.webview.postMessage({command:"physicalpartitions", jsonData: partitions});
 								break;
+
+							case 'delete':
+								var result = await DeleteDocument(message.db, message.container, message.pkey, message.docid);
+								panel.webview.postMessage({command:"deleteresult", deleteresult: result});
+								//var deletelist = message.dlist;
+								//DeleteSproc(message.db, message.container);
+
 						}
 					},
 					undefined,
@@ -333,7 +365,7 @@ function getWebviewContent(js1,js2,js3,js4,js5,js6,css1){
                 </div>
                 <div>					
                     <input type="button" id="QueryOptionsButton" value="Options" class="commandbutton"/>
-                    <input type="button" id="RunQuery" value="Execute" class="commandbutton"/>			
+                    <input type="button" id="RunQuery" value="Execute" class="commandbutton"/>					
                 </div> 
                 
             </div>
@@ -376,6 +408,7 @@ function getWebviewContent(js1,js2,js3,js4,js5,js6,css1){
 				<div class='tablink' data-destination='spatialresults'>Map</div>
 				<div class='tablink' data-destination='analyzeresults'>Data Analyzer</div>
 				<div class='tablink' data-destination='qanalyzer'>Query Analyzer</div>
+				<div id='deleteButton' style='background: whitesmoke;padding: 3px 5px;position: fixed;right: 120px;margin: 4px 0 0 0;border-radius: 3px;color: black;' data-flag='1'>Delete</div>
 				<div id='darkmodeToggle' style='position:fixed; right:10px;color:black' class='toggle1 toggle1selected' data-flag='1'>Dark Mode</div>
 			</div>
             <div id='bottomcontainer' class="containergriditem bottomcontainer">
@@ -831,6 +864,31 @@ function getWebviewContent(js1,js2,js3,js4,js5,js6,css1){
 	</svg>
 	<div class='loadingqueryboxtext'>Loading...</div>
 	</dialog>
+	<dialog id='deleteoperationbox' class='deletebox'>
+		<div id='deletemissingmsg' style='display:none' class='deleteboxmissingmsg'>
+			Partition Key and Document Id values are required.
+		</div>
+		<div style='text-align:center'>
+			<div style='padding: 2px;letter-spacing: 1px; font-weight:bold'>Documents of the following query will be deleted!</div>
+			<div id='selecttodelete' class='querytodeletebox' ></div>
+		</div>
+		<table class='scrolltable'>
+			<thead>
+				<tr>
+					<th>Partition Key</th>
+					<th>Document Id</th>
+					<th class='width80px'>Status</th>
+					<th class='width80px'>R/U Charge</th>
+				</tr>
+			</thead>
+			<tbody id='itemstodeletelist' style='max-height:60vh'>
+			</tbody>
+		</table>
+		<div style='text-align:center; padding:5px; background: dimgray'>			
+			<input type='button' class='buttonstyle2' value='Delete' id='StartDeleteButton'></input>
+			<input type='button' class='buttonstyle2' value='Close' onclick='document.getElementById("deleteoperationbox").close()'></input>
+		</div>		
+	</dialog>
     </html>
 	<script>
 	const vscode = acquireVsCodeApi();
@@ -888,6 +946,14 @@ function getWebviewContent(js1,js2,js3,js4,js5,js6,css1){
 		document.getElementById("authError").style.display = 'none';
 		document.getElementById("loadingbox").close();
 		document.getElementById("connectionbox").showModal();
+	});
+
+	document.getElementById('deleteButton').addEventListener("click", function(){
+		DeleteDataClicked();
+	});
+
+	document.getElementById('StartDeleteButton').addEventListener("click", function(){		
+		StartDeletingRows();
 	});
 
 	document.getElementById("darkmodeToggle").addEventListener("click", function(){
@@ -1340,8 +1406,41 @@ async function GetIndexMetrics(dbname, containername, query){
 		}		
 	return lastindexingmetrics.result
 }
+
 async function HashIt(value){	
 		return value.split("").reduce(function(a,b){a=((a<<5)-a)+b.charCodeAt(0);return a&a},0);	 
+}
+
+/*
+async function DeleteSproc(dbname, containerid){
+	await DeleteDocument(dbname, containerid,0,0);
+	const container = cosmosClient.database(dbname).container(containerid);
+	var exists = false;
+	try {
+	var sproc = await container.scripts.storedProcedure('Delete').read().then((results) =>{
+		// Found
+		exists = results;
+
+	}).catch((e)=> {
+		console.log(e);
+		if (e.code == 404){
+			// Not Found
+		}
+	});
+}
+catch(e){
+	console.log(e);
+}
+	return sproc;
+
+}*/
+
+async function DeleteDocument(dbname, containerid, pkey, docid){	
+	const container = cosmosClient.database(dbname).container(containerid);
+	var item = await container.item(docid, pkey); //.read();	
+	var result = await item.delete();
+	return {pkey: pkey, id:docid, status: result.statusCode, ru: result.requestCharge}
+	//return result.statusCode == 204;
 }
 
 function deactivate() {}

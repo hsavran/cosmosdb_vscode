@@ -1,0 +1,3 @@
+This program is free software. It comes without any warranty, to the extent permitted by applicable law. 
+Delete functionality is introduced in Application's 0.0.40 version.
+Please take all steps necessary to check that you are deleting the correct data. You cannot hold Cosmos DB SQL Studio coders for any damages or issues that may arise by using Delete function.

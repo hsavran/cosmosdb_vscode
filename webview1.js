@@ -1,4 +1,5 @@
 var containers=[];
+var currentpkey = null;
 var dbAccounts=[];
 var queryOptions = {
 	populateQueryMetrics :false,
@@ -14,6 +15,7 @@ var currentquery = {
 	imetrics: {},
 	reexec :false
 }
+var deletelist = [];
 
 function ExecuteQuery(querytxt){
 	var db = document.getElementById('cosmosdblist').value;
@@ -282,6 +284,7 @@ function DbChanged(dbname){
 
 function ContainerChanged(cname){	
 	if (cname != '0'){
+		currentpkey = null;
 		var selected = containers.filter(function(val){
 			return val.container == cname;
 		});
@@ -296,7 +299,9 @@ function ContainerChanged(cname){
 	}
 };
 
-function RenderContainerInfo(cinfo){	
+function RenderContainerInfo(cinfo){
+	//currentpkey is important for delete function
+	currentpkey = cinfo.pkey;
 	document.getElementById('cosmosdbpkeyname').innerHTML = cinfo.pkey;
 	document.getElementById("partkeytxt").textContent = cinfo.pkey;
 	document.getElementById("uqkeytxt").textContent = cinfo.ukey;
@@ -431,7 +436,7 @@ function HandleQueryExecution(){
 		query = selected;
 	}
 	currentquery.querytxt = query;	
-	ExecuteQuery(query, queryOptions);
+	ExecuteQuery(query, queryOptions);	
 };
 
 function ClearCurrentQuery (){
@@ -813,6 +818,85 @@ function CreateColors(number){
 	}
 	return pool;
 }
+
+async function DeleteDataClicked(){
+	if (currentquery && currentquery.querytxt)	{
+		document.getElementById('selecttodelete').innerHTML = currentquery.querytxt;
+	} else {
+		document.getElementById('selecttodelete').innerHTML = 'A query needs to be executed first.';
+	}
+	document.getElementById('deletemissingmsg').style.display = 'none';
+	var db = document.getElementById('cosmosdblist').value;
+    var container = document.getElementById('cosmoscontainers').value;
+	deletelist = await GetNecessaryInformationToDelete();
+	if (deletelist != null){		
+		document.getElementById('StartDeleteButton').disabled = false;
+	} else{
+		document.getElementById('StartDeleteButton').disabled = true;
+		document.getElementById('deletemissingmsg').style.display = 'block';
+	}
+}
+
+async function GetNecessaryInformationToDelete(){	
+	var pkey = currentpkey.replace("/","");
+	var dest = document.getElementById('itemstodeletelist');
+	document.getElementById('deleteoperationbox').showModal();
+	dest.innerHTML = '';
+	if (currentdata){
+		deletelist = [];
+		var missing = 0;
+		// catch if id or pkey does not exists.
+		for (var i=0; i< currentdata.length; i++){
+			var pkeyval = currentdata[i][pkey] ?? 'Missing';
+			var idval = currentdata[i].id ?? "Missing";
+			dest.append(CreateItemToDeleteRow(idval,pkeyval));			
+			if (pkeyval != 'Missing' && idval != 'Missing')
+			{
+				deletelist.push({id:idval, pkey: pkeyval});				
+			} else{
+				missing++;				
+			}
+		}
+		if (missing > 0){			
+			return null;
+		}
+		return deletelist;
+	}
+	return null;
+}
+
+function CreateItemToDeleteRow(id, pkey){
+	var row = CreateHTMLElement('tr',null,null,[{name:'data-pkey', val: pkey},{name:'data-id',val:id}]);
+	var pkey = CreateHTMLElement('td',null, pkey);
+	var docid = CreateHTMLElement('td',null,id);
+	row.append(pkey);
+	row.append(docid);
+	row.append(CreateHTMLElement('td','width75px'));
+	row.append(CreateHTMLElement('td','width80px'));
+	return row;
+}
+
+function StartDeletingRows(){
+	document.getElementById('StartDeleteButton').disabled = true;
+	var db = document.getElementById('cosmosdblist').value;
+    var container = document.getElementById('cosmoscontainers').value;
+	if (deletelist != null){
+		for (var i=0; i<deletelist.length; i++){
+			try{
+			vscode.postMessage({
+				command: 'delete',
+				db: db,
+				container: container,
+				pkey: deletelist[i].pkey,
+				docid: deletelist[i].id				
+			});
+		}
+		catch(ex){
+			console.log(ex);
+		}
+		}
+	}
+}
 	
 window.addEventListener('message', event => {
 	const message = event.data;
@@ -970,12 +1054,30 @@ window.addEventListener('message', event => {
 			containers.push(message.jsonData);
 			break;
 		case 'authfail':
-			document.getElementsById('authError').style.display ='block';
+			//document.getElementById('authError').style.display ='block';
+			document.getElementById('loadingbox').close();
+			document.getElementById('connectionbox').showModal();
 			break;
 		case 'physicalpartitions':			
 			DisplayPhysicalPartitions(message.jsonData);			
 			break;
+		case 'deleteresult':
+			var mark = ''
+			if (message.deleteresult.status == 204){
+				mark = '&#x2713'
+			} else{
+				mark = 'x';
+			}
+			document.querySelector('tr[data-id="' + message.deleteresult.id + '"]>td:nth-of-type(3)').innerHTML = mark;
+			document.querySelector('tr[data-id="' + message.deleteresult.id + '"]>td:nth-of-type(4)').innerHTML =message.deleteresult.ru;
+			//console.log(message.deleteresult);
+			break;
+		case 'openconnectionbox':
+			document.getElementById('loadingbox').close();
+			document.getElementById('connectionbox').showModal();
+			break;
 		}
+		
 });
 
 document.onkeydown = fkey;
