@@ -26,6 +26,11 @@ You can query Azure Cosmos DB SQL API by using VS Code now. Extension displays E
 
 ![feature X](https://github.com/hsavran/CosmosDB/raw/master/overall.png)
 
+## Disclaimer
+
+This program is free software. It comes without any warranty, to the extent permitted by applicable law. Delete functionality is introduced in Application's 0.0.40 version.
+Please take all steps necessary to check that you are deleting the correct data. You cannot hold Cosmos DB SQL Studio coders for any damages or issues that may arise by using Delete function.
+
 ## Release Notes
 
 This is the first version of the tool. 
@@ -82,3 +87,4 @@ I hope you will enjoy to query Cosmos DB SQL API from VS Code.
 * Red style is fixed for warning rows
 * Index Hit Documents value is rounded to 2 decimals
 * Indexing Metrics bug is fixed.
+* Delete function is added.
