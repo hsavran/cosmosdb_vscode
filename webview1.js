@@ -847,8 +847,14 @@ async function GetNecessaryInformationToDelete(){
 		var missing = 0;
 		// catch if id or pkey does not exists.
 		for (var i=0; i< currentdata.length; i++){
-			var pkeyval = currentdata[i][pkey] ?? 'Missing';
-			var idval = currentdata[i].id ?? "Missing";
+			var pkeyval = 'Missing';
+			var idval = 'Missing';
+			if (currentdata[i][pkey] != null){
+				pkeyval = currentdata[i][pkey];
+			}
+			if (currentdata[i].id != null){
+				idval = currentdata[i].id 
+			}			
 			dest.append(CreateItemToDeleteRow(idval,pkeyval));			
 			if (pkeyval != 'Missing' && idval != 'Missing')
 			{
