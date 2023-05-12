@@ -1,82 +1,72 @@
 const vscode = require('vscode');
-//const geoj = require('geojson-validation');
 const path = require('path');
 const { CosmosClient } = require('@azure/cosmos');
 const { CosmosDBManagementClient } = require("@azure/arm-cosmosdb");
-//const { DefaultAzureCredential } = require("@azure/identity");
-const { useIdentityPlugin, DefaultAzureCredential  } = require("@azure/identity");
+const { useIdentityPlugin, DefaultAzureCredential } = require("@azure/identity");
 const { vsCodePlugin } = require("@azure/identity-vscode");
 useIdentityPlugin(vsCodePlugin);
-
 const { ResourceManagementClient } = require('@azure/arm-resources');
 const { SubscriptionClient } = require("@azure/arm-subscriptions");
 const cryptobase = require('crypto-js');
 const cryptoJs = require('crypto-js');
 const fetch = require('node-fetch');
-var cosmosClient;
-//const credential = new VisualStudioCodeCredential();
-//credential.getToken();
-const creds = new DefaultAzureCredential();
-HandleToken();
-//creds.getToken();
-var subClient = new SubscriptionClient(creds);
-var resClient; //= new ResourceManagementClient(creds);
-var cosmosArmClient;// = new CosmosDBManagementClient(creds);
-var panel;
-var cosmosMaster = [];
-var myAzure ={
-	subs:[],
-	rgroups :[],
-	accounts:[],
-	dbs:[],
-	cstring:[]
-};
-var pkeyranges = {
-	dbname: null,
-	container:null,
-	partitions:undefined
+
+var cosmosStudio = cosmosStudio || {
+	panel: undefined,
+	jslibs: [
+		'webview1.js',
+		'/node_modules/json-formatter-js/dist/json-formatter.umd.js',
+		'/customJs/src-min-noconflict/ace.js',
+		'/customJs/src-min-noconflict/mode-sql.js',
+		'/customJs/src-min-noconflict/ext-language_tools.js',
+		'node_modules/chart.js/dist/chart.min.js'],
+	cssfiles:['webview.css'],
+	creds : new DefaultAzureCredential(),	 
+	subClient : null,
+	cosmosClient:{},
+	cosmosArmClient:{},
+	resClient:{},	
+	cosmosMaster:{},
+	lastindexingmetrics:{
+		db:'', container:'', queryhash:'', result:{}
+	},
+	pkeyranges: {
+		dbname: null,
+		container:null,
+		partitions:undefined
+	},
+	myAzure :{
+		subs:[],
+		rgroups :[],
+		accounts:[],
+		dbs:[],
+		cstring:[]
+	},
+	init: async function(){
+		try
+		{	
+			await cosmosStudio.creds.getToken();
+		}
+		catch(ex){
+			cosmosStudio.HandleErrorTxt(ex);
+		}
+		this.subClient = new SubscriptionClient(this.creds);
+	},
 };
 
-var lastindexingmetrics = {
-	db:'', container:'', queryhash:'', result:{}
-};
-
-async function HandleToken(){
-	await creds.getToken(); //'https://login.microsoftonline.com/.default');
-}
-
-async function GetSubscriptons(){
-	/*try{
-		const credential = new VisualStudioCodeCredential();
-  		await credential.getToken(); //"https://login.microsoftonline.com/")
-	}
-	catch(ex){
-		console.log(ex);
-	}*/
-	//await credential.getToken('https://login.microsoftonline.com');
-	return subClient.subscriptions.list().then((result) => {
-		myAzure.subs = result;
+cosmosStudio.GetSubscriptons = async function () {
+	return cosmosStudio.subClient.subscriptions.list().then((result) => {
+		cosmosStudio.myAzure.subs = result;
 		return result;
 	}).catch((err) => {	
-		vscode.window.showErrorMessage(err.message);	
-	  	//console.error(err);
+		vscode.window.showErrorMessage(err.message);	  	
 	  	return null;
 	});
 };
 
-async function GetResourceGroups(){	
-	return resClient.resourceGroups.list().then((result) => {
-		myAzure.rgroups.push(result);	  
-		return result;
-	}).catch((err) => {		
-		console.error(err);
-		return null;
-	  });
-};
-
-async function GetDatabaseAccounts(){	
-	return await cosmosArmClient.databaseAccounts.list().then((result) => {
-		myAzure.accounts.push(result);		
+cosmosStudio.GetDatabaseAccounts = async function (){	
+	return await cosmosStudio.cosmosArmClient.databaseAccounts.list().then((result) => {
+		cosmosStudio.myAzure.accounts.push(result);		
 		return result;
 	  }).catch((err) => {		
 		console.error(err);
@@ -84,14 +74,41 @@ async function GetDatabaseAccounts(){
 	  });
 };
 
-async function GetDatabases(subid,rgroup, account){	
-	return await cosmosArmClient.sqlResources.listSqlDatabases(rgroup,account.name).then((result)=>{
-		panel.webview.postMessage({command:'dbCount', jsonData: result.length});
+cosmosStudio.GetResourceGroups = async function(){	
+	return cosmosStudio.resClient.resourceGroups.list().then((result) => {
+		cosmosStudio.myAzure.rgroups.push(result);	  
+		return result;
+	}).catch((err) => {		
+		console.error(err);
+		return null;
+	  });
+};
+
+cosmosStudio.GetConnectionString = async function(rgroup, dbacct){
+	try{
+	return cosmosStudio.cosmosArmClient.databaseAccounts.listConnectionStrings(rgroup,dbacct.name).then((cstr)=>{
+		cosmosStudio.myAzure.cstring.push(cstr);
+		var temp = cstr.connectionStrings.filter(function(a){return a.description == "Primary Read-Only SQL Connection String"});
+		return temp[0];
+	});
+}
+catch(ex){
+	console.log(ex);
+}
+};
+
+cosmosStudio.CreateConnection = function(cstring){	
+		cosmosStudio.cosmosClient = new CosmosClient(cstring);	
+};
+
+cosmosStudio.DiscoverDatabases = async function(subid,rgroup, account){	
+	return await cosmosStudio.cosmosArmClient.sqlResources.listSqlDatabases(rgroup,account.name).then((result)=>{
+		cosmosStudio.panel.webview.postMessage({command:'dbCount', jsonData: result.length});
 		for (var d=0; d<result.length; d++){			
 			var info = (({consistencyPolicy, enableAnalyticalStorage, enableAutomaticFailover, enableFreeTier, location, backupPolicy}) => ({ consistencyPolicy, enableAnalyticalStorage, enableAutomaticFailover, enableFreeTier, location, backupPolicy}))(account);
 			info.name = result[d].name;
-			panel.webview.postMessage({command:'addDb', jsonData: info});
-			GetContainers(rgroup,account.name,result[d].name, subid, result[d].resource._rid);
+			cosmosStudio.panel.webview.postMessage({command:'addDb', jsonData: info});
+			cosmosStudio.GetContainers(rgroup,account.name,result[d].name, subid, result[d].resource._rid);
 		}		
 		return result;		
 	}).catch((err)=>{
@@ -100,55 +117,11 @@ async function GetDatabases(subid,rgroup, account){
 	});
 };
 
-async function GetConnectionString(rgroup, dbacct){
-	return cosmosArmClient.databaseAccounts.listConnectionStrings(rgroup,dbacct.name).then((cstr)=>{
-		myAzure.cstring.push(cstr);
-		var temp = cstr.connectionStrings.filter(function(a){return a.description == "Primary Read-Only SQL Connection String"});
-		return temp[0];
-	});
-}
-
-async function GetDatabases2(){	
-	var requestOptions ={};
-	requestOptions.populateQuotaInfo=true;
-	var { resources} = await cosmosClient.databases.readAll().fetchAll();
-	panel.webview.postMessage({command:'dbCount', jsonData: resources.length});
-	for (var i=0; i<resources.length; i++){
-		var info ={}; // = (({consistencyPolicy, enableAnalyticalStorage, enableAutomaticFailover, enableFreeTier, location, backupPolicy}) => ({ consistencyPolicy, enableAnalyticalStorage, enableAutomaticFailover, enableFreeTier, location, backupPolicy}))(account);
-		info.name = resources[i].id;
-		panel.webview.postMessage({command:'addDb', jsonData: info});		
-		var temp = await cosmosClient.database(resources[i].id).containers.readAll({populateQuotaInfo:true}).fetchAll();
-		//var test = await cosmosClient.database(resources[i].id).container(temp.resources[0].id).read({populateQuotaInfo:true});
-		var containerList = temp.resources;		
-		for (var c=0; c< containerList.length;c++){			
-			panel.webview.postMessage({command:'contCount', jsonData: containerList.length});
-			panel.webview.postMessage({command:'addCon', jsonData: {
-				container: containerList[c].id, 
-				db: resources[i].id, 
-				pkey: containerList[c].partitionKey.paths[0], 
-				indexing: containerList[c].indexingPolicy,
-				conflict: containerList[c].conflictResolutionPolicy.mode
-			}});
-		}	
-	}
-};	
-
-function CreateAzureArmItem(subid,rgroup,account,dbname,colls){
-	return {
-		subscription: subid,
-		resGrp: rgroup,
-		dbAcct: account,
-		dbName: dbname,
-		colls: colls
-		};
-};
-
-async function GetContainers(rgroup, account, dbname, subid, testrid){
-	//const client2 = new CosmosDBManagementClient(creds, subid);		
-	cosmosArmClient.sqlResources.listSqlContainers(rgroup,account,dbname).then((result) =>{
+cosmosStudio.GetContainers = async function(rgroup, account, dbname, subid){	
+	cosmosStudio.cosmosArmClient.sqlResources.listSqlContainers(rgroup,account,dbname).then((result) =>{
 		if (result.length > 0){
-			panel.webview.postMessage({command:'contCount', jsonData: result.length});
-			var dbarm = CreateAzureArmItem(subid, rgroup, account, dbname,[]);
+			cosmosStudio.panel.webview.postMessage({command:'contCount', jsonData: result.length});
+			var dbarm = cosmosStudio.CreateAzureArmItem(subid, rgroup, account, dbname,[]);
 			for (var c=0; c<result.length; c++){
 				var cont = {
 					container: result[c].name, 
@@ -161,136 +134,426 @@ async function GetContainers(rgroup, account, dbname, subid, testrid){
 				if (result[c].resource.uniqueKeyPolicy != undefined){
 					cont.ukey = result[c].resource.uniqueKeyPolicy.uniqueKeys[0].paths[0]
 				} 			
-				panel.webview.postMessage({
+				cosmosStudio.panel.webview.postMessage({
 					command:'addCon', 
 					jsonData: cont
 				});
 				dbarm.colls.push({name: result[c].name, pkey: result[c].resource.partitionKey.paths[0], indexing: result[c].resource.indexingPolicy});
-				/*client2.collectionPartition.listUsages(rgroup,account,testrid,result[c].resource._rid).then((temp)=>{
-					var test = 1;
-				});*/
+				
 			}
-			cosmosMaster.push(dbarm);
-			//console.log(dbarm);
+			cosmosStudio.cosmosMaster.push(dbarm);			
 		}
-		
-		
 	}).catch((err) => {
 		console.log(err);
-	});
-	/*
-	client2.collectionPartition.listUsages(rgroup,account,dbname,'Orders').then((result)=>{
-console.log(result);
-	}).catch((err)=>{
-		console.log(err);
-	});*/
+	});	
+};
+
+cosmosStudio.CreateAzureArmItem = function(subid, rgroup, account, dbname, colls){
+	return {
+		subscription: subid,
+		resGrp: rgroup,
+		dbAcct: account,
+		dbName: dbname,
+		colls: colls
+		};
+};
+
+cosmosStudio.CreateNewDatabase = async function (name) {
+	try{
+		const {database} = await cosmosStudio.cosmosClient.databases.createIfNotExists({id: name});
+		vscode.window.showInformationMessage(database.id + ' is created.');
+		return database;
+	}
+	catch(error){
+		vscode.window.showErrorMessage(error);
+	}
+};
+
+cosmosStudio.GetDatabases = async function () {
+	var requestOptions ={};
+	requestOptions.populateQuotaInfo=true;
+	var { resources} = await cosmosStudio.cosmosClient.databases.readAll().fetchAll();
+	cosmosStudio.panel.webview.postMessage({command:'dbCount', jsonData: resources.length});
+	for (var i=0; i<resources.length; i++){
+		var info ={}; // = (({consistencyPolicy, enableAnalyticalStorage, enableAutomaticFailover, enableFreeTier, location, backupPolicy}) => ({ consistencyPolicy, enableAnalyticalStorage, enableAutomaticFailover, enableFreeTier, location, backupPolicy}))(account);
+		info.name = resources[i].id;
+		cosmosStudio.panel.webview.postMessage({command:'addDb', jsonData: info});		
+		var temp = await cosmosStudio.cosmosClient.database(resources[i].id).containers.readAll({populateQuotaInfo:true}).fetchAll();		
+		var containerList = temp.resources;		
+		for (var c=0; c< containerList.length;c++){			
+			cosmosStudio.panel.webview.postMessage({command:'contCount', jsonData: containerList.length});
+			cosmosStudio.panel.webview.postMessage({command:'addCon', jsonData: {
+				container: containerList[c].id, 
+				db: resources[i].id, 
+				pkey: containerList[c].partitionKey.paths[0], 
+				indexing: containerList[c].indexingPolicy,
+				conflict: containerList[c].conflictResolutionPolicy.mode
+			}});
+		}	
+	}
+};
+
+cosmosStudio.ExecuteQuery = async function(dbname, containerid, query, options){
+	var cosmosResponse = await cosmosStudio.CreateNewCosmosResponseObj();
+	try{
+		var indexingmetrics= null;
+		if (options!=null && options.populateIndexingMetrics){
+			indexingmetrics = await cosmosStudio.GetIndexMetrics(dbname, containerid, query);
+		}	
+		const container = cosmosStudio.cosmosClient.database(dbname).container(containerid);	
+		const queryIterator = container.items.query(query, options);
+		let count = 0;
+		
+		cosmosResponse.indexingMetrics = indexingmetrics;	
+		while (queryIterator.hasMoreResults() && count <= 100000) {		
+			const resources = await queryIterator.fetchNext();		
+			cosmosResponse.charge += Number(resources.headers['x-ms-request-charge']);
+			cosmosResponse.result = cosmosResponse.result.concat(resources.resources);		
+			if (resources.queryMetrics){			
+				for (const prop in resources.queryMetrics){				
+					if (resources.queryMetrics[prop]){
+						cosmosResponse.requests++;
+						cosmosResponse.queryMetrics.push(resources.queryMetrics[prop]);
+						cosmosResponse.qms.push(await cosmosStudio.CreateQueryMetrics(prop, resources.queryMetrics[prop]));					
+					}
+				}
+			}
+		}
+		return await cosmosStudio.HandleQueryMetricsCalculation(cosmosResponse);	
+	}
+	catch(e){
+		cosmosResponse.hasError = true;
+		cosmosResponse.error = await cosmosStudio.HandleErrorTxt(e.message);		
+		return cosmosResponse;
+	}
+};
+
+cosmosStudio.GetIndexMetrics = async function(dbname, containername, query){
+	var hashed = await cosmosStudio.HashIt(query);
+	if (cosmosStudio.lastindexingmetrics.db == dbname && cosmosStudio.lastindexingmetrics.container == containername && cosmosStudio.lastindexingmetrics.result && cosmosStudio.lastindexingmetrics.queryhash == hashed){
+		return cosmosStudio.lastindexingmetrics.result;
+	} else {
+		cosmosStudio.lastindexingmetrics.db = dbname;
+		cosmosStudio.lastindexingmetrics.container = containername;
+		cosmosStudio.lastindexingmetrics.queryhash = await cosmosStudio.HashIt(query);
+	}	
+	var q ={
+		query:query,
+		parameters:[]
+	}	
+	var dt = cosmosStudio.cosmosClient.database(dbname);
+	var endpoint = dt.clientContext.cosmosClientOptions.endpoint;
+	var key = dt.clientContext.cosmosClientOptions.key;
+	var url = endpoint +"/dbs/" + dbname + "/colls/"+ containername + "/docs";
+	var pkeyrange = null;
+	if (cosmosStudio.pkeyranges.dbname == dbname && cosmosStudio.pkeyranges.container == containername && cosmosStudio.pkeyranges.partitions){
+		pkeyrange = cosmosStudio.pkeyranges.partitions.PartitionKeyRanges[0].id;
+	} else {
+		await cosmosStudio.FindPhysicalPartitions(dbname, containername);
+		pkeyrange = cosmosStudio.pkeyranges.partitions.PartitionKeyRanges[0].id;
+	}
+	cosmosStudio.lastindexingmetrics.result = "N/A";
+	var response = await fetch(url,
+		{
+			method: 'POST',
+			headers: await cosmosStudio.CreateRequiredHeadersforApi('POST', dbname, containername, key, true,pkeyrange),
+			body: JSON.stringify(q)
+		}); //.then(response=>response.json());
+		//check the status to continue
+		if (response.ok){
+			var indexmetrics = response.headers.get('x-ms-cosmos-index-utilization');
+			if (indexmetrics){
+				var result = Buffer.from(indexmetrics,'base64').toString();
+				cosmosStudio.lastindexingmetrics.result = JSON.parse(result);
+			}
+		}		
+	return cosmosStudio.lastindexingmetrics.result
+};
+
+cosmosStudio.HashIt = function (value){	
+	return value.split("").reduce(function(a,b){a=((a<<5)-a)+b.charCodeAt(0);return a&a},0);	 
+};
+
+cosmosStudio.FindPhysicalPartitions = async function(dbname, containername){
+	var dt = cosmosStudio.cosmosClient.database(dbname);
+	var endpoint = dt.clientContext.cosmosClientOptions.endpoint;
+	var key = dt.clientContext.cosmosClientOptions.key;
+	var url = endpoint +"/dbs/" + dbname + "/colls/"+ containername + "/pkranges";
+	cosmosStudio.pkeyranges.dbname = dbname;
+	cosmosStudio.pkeyranges.container = containername;
+	cosmosStudio.pkeyranges.partitions = await fetch(url,
+	{
+		method: 'GET',
+		headers: await cosmosStudio.CreateRequiredHeadersforApi('GET', dbname, containername, key, false)		
+	}).then(response=>response.json());
+	return cosmosStudio.pkeyranges.partitions;
+};
+
+cosmosStudio.CreateRequiredHeadersforApi = async function(action, dbname, containername, key, forquery, pkeyrangeid){
+	var now = new Date().toUTCString();	
+	var rtype = "pkranges";
+	if (forquery){
+		var rtype = "docs";
+	}
+	var rid = "dbs/" + dbname + "/colls/" + containername;
+	var text = (action || "").toLowerCase() + "\n" + (rtype || "").toLowerCase() + "\n" + (rid || "") + "\n" + now.toLowerCase() + "\n" + "" + "\n";
+	var key = cryptoJs.enc.Base64.parse(key);
+	var signature = cryptobase.HmacSHA256(text,key).toString(cryptoJs.enc.Base64);
+	var MasterToken = "master";
+	var TokenVersion = "1.0";
+	var authToken = encodeURIComponent("type=" + MasterToken + "&ver=" + TokenVersion + "&sig=" + signature);	
+	var headers = new fetch.Headers({
+		'authorization':authToken,
+		'x-ms-date':now,
+		'x-ms-version':'2018-12-31'
+		//'x-ms-cosmos-populateindexmetrics':true
+	});	
+	if (forquery){
+		headers.append('Content-Type','application/query+json');
+		headers.append('x-ms-documentdb-isquery', true);
+		headers.append('x-ms-documentdb-query-enablecrosspartition',true);
+		headers.append('x-ms-cosmos-populateindexmetrics',true);		
+	} else{
+		headers.append('Content-Type','application/json');
+	}
+	if (pkeyrangeid){
+		headers.append('x-ms-documentdb-partitionkeyrangeid',pkeyrangeid);
+	}
+	return headers;
+};
+
+cosmosStudio.CreateNewCosmosResponseObj = async function(){
+	return {
+		result:[],
+		queryMetrics:[],
+		indexingMetrics: {},
+		charge:0,
+		count:0,
+		hasError: false,
+		error: '',
+		requests:0,
+		qms:[],
+		qm:{
+			partitionid: 0,
+			numberofpartition:0,
+			documentLoadTime:0,
+			documentWriteTime:0,
+			indexHitDocumentCount:0,
+			indexHitRatio:0,
+			indexHitLookupTime:0,
+			outputDocumentCount:0,
+			outputDocumentSize:0,
+			queryPreparationTimes:{
+				logicalPlanBuildTime:0,
+				physicalPlanBuildTime:0,
+				queryCompilationTime:0,
+				queryOptimizationTime:0
+			},
+			retrievedDocumentCount:0,
+			retrievedDocumentSize:0,
+			runtimeExecutionTimes:{
+				queryEngineExecutionTime:0,
+				systemFunctionExecutionTime:0,
+				userDefinedFunctionExecutionTime:0
+			},
+			totalQueryExecutionTime:0,
+			vmExecutionTime:0,
+			requestUnits:0
+		}
+	};
+};
+
+cosmosStudio.CreateQueryMetrics = async function(pid, qmetrics){
+	return {
+		partitionid :pid,
+		documentLoadTime : qmetrics.documentLoadTime._ticks / 10000,
+		documentWriteTime : qmetrics.documentWriteTime._ticks / 10000,
+		indexHitDocumentCount : qmetrics.indexHitDocumentCount.toFixed(2),
+		indexHitLookupTime : qmetrics.indexLookupTime._ticks / 10000,
+		outputDocumentCount : qmetrics.outputDocumentCount,
+		outputDocumentSize : await cosmosStudio.formatBytes(qmetrics.outputDocumentSize),		
+		retrievedDocumentCount : qmetrics.retrievedDocumentCount,
+		retrievedDocumentSize : await cosmosStudio.formatBytes(qmetrics.retrievedDocumentSize),		
+		totalQueryExecutionTime : qmetrics.totalQueryExecutionTime._ticks/10000,
+		vmExecutionTime : qmetrics.vmExecutionTime._ticks/10000,
+		requestUnits: qmetrics.clientSideMetrics.requestCharge
+	};
+};
+
+cosmosStudio.HandleQueryMetricsCalculation = async function(cosmosResponse){
+	for (var q=0;q<cosmosResponse.queryMetrics.length; q++){
+		if (cosmosResponse.queryMetrics[q])		{
+		cosmosResponse.qm.documentLoadTime += cosmosResponse.queryMetrics[q].documentLoadTime._ticks / 10000;
+		cosmosResponse.qm.documentWriteTime += cosmosResponse.queryMetrics[q].documentWriteTime._ticks / 10000;
+		cosmosResponse.qm.indexHitDocumentCount += cosmosResponse.queryMetrics[q].indexHitDocumentCount;
+		cosmosResponse.qm.indexHitLookupTime += cosmosResponse.queryMetrics[q].indexLookupTime._ticks / 10000;
+		cosmosResponse.qm.outputDocumentCount += cosmosResponse.queryMetrics[q].outputDocumentCount;
+		cosmosResponse.qm.outputDocumentSize += cosmosResponse.queryMetrics[q].outputDocumentSize;
+		cosmosResponse.qm.queryPreparationTimes.logicalPlanBuildTime += cosmosResponse.queryMetrics[q].queryPreparationTimes.logicalPlanBuildTime._ticks / 10000;
+		cosmosResponse.qm.queryPreparationTimes.physicalPlanBuildTime += cosmosResponse.queryMetrics[q].queryPreparationTimes.physicalPlanBuildTime._ticks /10000;
+		cosmosResponse.qm.queryPreparationTimes.queryCompilationTime += cosmosResponse.queryMetrics[q].queryPreparationTimes.queryCompilationTime._ticks / 10000;
+		cosmosResponse.qm.queryPreparationTimes.queryOptimizationTime += cosmosResponse.queryMetrics[q].queryPreparationTimes.queryOptimizationTime._ticks / 10000;
+		cosmosResponse.qm.retrievedDocumentCount += cosmosResponse.queryMetrics[q].retrievedDocumentCount;
+		cosmosResponse.qm.retrievedDocumentSize += cosmosResponse.queryMetrics[q].retrievedDocumentSize;
+		cosmosResponse.qm.runtimeExecutionTimes.queryEngineExecutionTime += cosmosResponse.queryMetrics[q].runtimeExecutionTimes.queryEngineExecutionTime._ticks/10000;
+		cosmosResponse.qm.runtimeExecutionTimes.systemFunctionExecutionTime += cosmosResponse.queryMetrics[q].runtimeExecutionTimes.systemFunctionExecutionTime._ticks/10000;
+		cosmosResponse.qm.runtimeExecutionTimes.userDefinedFunctionExecutionTime += cosmosResponse.queryMetrics[q].runtimeExecutionTimes.userDefinedFunctionExecutionTime._ticks/10000;
+		cosmosResponse.qm.totalQueryExecutionTime += cosmosResponse.queryMetrics[q].totalQueryExecutionTime._ticks/10000;
+		cosmosResponse.qm.vmExecutionTime += cosmosResponse.queryMetrics[q].vmExecutionTime._ticks/10000;
+		}		
+	}
+	cosmosResponse.qm.indexHitDocumentCount = cosmosResponse.qm.indexHitDocumentCount.toFixed(2);
+	cosmosResponse.qm.documentLoadTime = await cosmosStudio.TakeAverage(cosmosResponse.qm.documentLoadTime, cosmosResponse.queryMetrics.length);
+	cosmosResponse.qm.documentWriteTime = await cosmosStudio.TakeAverage(cosmosResponse.qm.documentWriteTime, cosmosResponse.queryMetrics.length);
+	cosmosResponse.qm.indexHitLookupTime = await cosmosStudio.TakeAverage(cosmosResponse.qm.indexHitLookupTime, cosmosResponse.queryMetrics.length);
+	cosmosResponse.qm.queryPreparationTimes.logicalPlanBuildTime = await cosmosStudio.TakeAverage(cosmosResponse.qm.queryPreparationTimes.logicalPlanBuildTime,cosmosResponse.queryMetrics.length);
+	cosmosResponse.qm.queryPreparationTimes.physicalPlanBuildTime = await cosmosStudio.TakeAverage(cosmosResponse.qm.queryPreparationTimes.physicalPlanBuildTime,cosmosResponse.queryMetrics.length);
+	cosmosResponse.qm.queryPreparationTimes.queryCompilationTime = await cosmosStudio.TakeAverage(cosmosResponse.qm.queryPreparationTimes.queryCompilationTime,cosmosResponse.queryMetrics.length);
+	cosmosResponse.qm.queryPreparationTimes.queryOptimizationTime = await cosmosStudio.TakeAverage(cosmosResponse.qm.queryPreparationTimes.queryOptimizationTime,cosmosResponse.queryMetrics.length);
+
+	cosmosResponse.qm.runtimeExecutionTimes.queryEngineExecutionTime = await cosmosStudio.TakeAverage(cosmosResponse.qm.runtimeExecutionTimes.queryEngineExecutionTime,cosmosResponse.queryMetrics.length);
+	cosmosResponse.qm.runtimeExecutionTimes.systemFunctionExecutionTime = await cosmosStudio.TakeAverage(cosmosResponse.qm.runtimeExecutionTimes.systemFunctionExecutionTime,cosmosResponse.queryMetrics.length);
+	cosmosResponse.qm.runtimeExecutionTimes.userDefinedFunctionExecutionTime = await cosmosStudio.TakeAverage(cosmosResponse.qm.runtimeExecutionTimes.userDefinedFunctionExecutionTime,cosmosResponse.queryMetrics.length);
+	cosmosResponse.qm.totalQueryExecutionTime = await cosmosStudio.TakeAverage(cosmosResponse.qm.totalQueryExecutionTime,cosmosResponse.queryMetrics.length);
+	cosmosResponse.qm.vmExecutionTime = await cosmosStudio.TakeAverage(cosmosResponse.qm.vmExecutionTime,cosmosResponse.queryMetrics.length);
+
+	cosmosResponse.qm.outputDocumentSize = await cosmosStudio.formatBytes(cosmosResponse.qm.outputDocumentSize);
+	cosmosResponse.qm.retrievedDocumentSize = await cosmosStudio.formatBytes(cosmosResponse.qm.retrievedDocumentSize);
+	cosmosResponse.count = cosmosResponse.result.length;
+	cosmosResponse.qm.numberofpartition = cosmosResponse.queryMetrics.length;
+	return cosmosResponse;
+};
+
+cosmosStudio.TakeAverage = async function(number, counter){
+	if (number == 0){
+		return 0;
+	}
+	return number / counter;
+};
+
+cosmosStudio.formatBytes = async function(bytes, decimals = 2) {
+	if (bytes === 0) return '0 Bytes';
+	const k = 1024;
+	const dm = decimals <0 ? 0 : decimals;
+	const sizes = ['Bytes', 'KB', 'MB','GB'];
+	const i = Math.floor(Math.log(bytes) / Math.log(k));
+	return parseFloat((bytes / Math.pow(k,i)).toFixed(dm))+ ' ' + sizes[i];
+};
+
+cosmosStudio.HandleErrorTxt = async function(message){
+	try{
+		var custom = message.replace("Message: ","");
+		custom = custom.slice(0, custom.indexOf('\r'));
+		return JSON.parse(custom);
+	}
+	catch (e){
+		return message;
+	}
+};
+
+cosmosStudio.PointRead = async function(dbname, containerid, pkey, id){
+	const container = cosmosStudio.cosmosClient.database(dbname).container(containerid);	
+	var isNumber = Number(pkey);
+	var item = container.item(id,pkey);
+	var resource = await item.read();
+if (resource.statusCode = 404 && isNumber){
+	item = container.item(id,isNumber);
+	resource = await item.read();
+}
+	var cosmosResponse ={
+		result:[resource.resource],
+		charge:resource.requestCharge,
+		count:1
+	};
+	return cosmosResponse;
+};
+
+cosmosStudio.DeleteDocument = async function(dbname, containerid, pkey, docid){	
+		const container = cosmosStudio.cosmosClient.database(dbname).container(containerid);
+		var item;
+		if (pkey == "Missing"){
+			item = await container.item(docid, undefined);
+		} else{
+			item = await container.item(docid, pkey);
+		}		
+		var result = await item.delete();
+		return {pkey: pkey, id:docid, status: result.statusCode, ru: result.requestCharge}	
 };
 
 async function activate(context) {
+	cosmosStudio.init();
 	context.subscriptions.push(
 		vscode.commands.registerCommand('cosmosdb.openEditor', () => {
 			const columnToShownIn = vscode.window.activeTextEditor
 			? vscode.window.activeTextEditor.viewColumn
 			: undefined;
-			if (panel){
-				panel.reveal(columnToShownIn);
-			} else{				
-			
-			panel = vscode.window.createWebviewPanel(
-				'CosmosEditor', 
-				'Cosmos DB Studio', 
-				vscode.ViewColumn.One,
-				{
-					enableScripts: true,
-					retainContextWhenHidden:true
-				});
-			}
-				const js1 = vscode.Uri.file(
-					path.join(context.extensionPath,'webview1.js')
-				);
-				var js1loc = panel.webview.asWebviewUri(js1);
+			if (cosmosStudio.panel){
+				cosmosStudio.panel.reveal(columnToShownIn);
+			} else{
+				cosmosStudio.panel = vscode.window.createWebviewPanel(
+					'CosmosEditor', 
+					'Cosmos DB Studio', 
+					vscode.ViewColumn.One,
+					{
+						enableScripts: true,
+						retainContextWhenHidden:true
+					});
+				}
+				var jslocs = [];
+				cosmosStudio.jslibs.forEach((jslib)=>{ 
+					var loc = vscode.Uri.file(path.join(context.extensionPath,jslib));
+					var scr = '<script src="'+ cosmosStudio.panel.webview.asWebviewUri(loc)+'"></script>';
+					jslocs.push(scr);
+				});				
 
 				const css1 = vscode.Uri.file(
 					path.join(context.extensionPath,'webview.css')
 				);
-				var css1loc = panel.webview.asWebviewUri(css1);
+				var cssloc = cosmosStudio.panel.webview.asWebviewUri(css1);				
 
-				const jsonjs = vscode.Uri.file(
-					path.join(context.extensionPath,'/node_modules/json-formatter-js/dist/json-formatter.umd.js')
-				);
-				var js2loc = panel.webview.asWebviewUri(jsonjs);
+				cosmosStudio.panel.webview.html = getWebviewContent(jslocs, cssloc);
 
-				const sqljs = vscode.Uri.file(
-					path.join(context.extensionPath,'/customJs/src-min-noconflict/ace.js')
-				);
-				var js3loc = panel.webview.asWebviewUri(sqljs);
-
-				const sqljs2 = vscode.Uri.file(
-					path.join(context.extensionPath,'/customJs/src-min-noconflict/mode-sql.js')
-				);
-				var js4loc = panel.webview.asWebviewUri(sqljs2);
-				const sqljs3 = vscode.Uri.file(
-					path.join(context.extensionPath,'/customJs/src-min-noconflict/ext-language_tools.js')
-				);
-				var js5loc = panel.webview.asWebviewUri(sqljs3);
-				
-				const chartjs = vscode.Uri.file(
-					path.join(context.extensionPath,'node_modules/chart.js/dist/chart.min.js')
-				);
-				var j6loc = panel.webview.asWebviewUri(chartjs);
-				/*
-				const leafjs = vscode.Uri.file(
-					path.join(context.extensionPath,'/node_modules/leaflet/dist/leaflet.js')
-				);
-				var j6loc = panel.webview.asWebviewUri(leafjs);
-				const leafmap = vscode.Uri.file(
-					path.join(context.extensionPath,'/node_modules/leaflet/dist/leaflet.js.map')
-				);
-				var j7loc = panel.webview.asWebviewUri(leafmap);
-				const leafcs = vscode.Uri.file(
-					path.join(context.extensionPath,'/node_modules/leaflet/dist/leaflet.css')
-				);				
-				var css2loc = panel.webview.asWebviewUri(leafcs);*/
-
-
-				panel.webview.html = getWebviewContent(js1loc,js2loc,js3loc,js4loc,js5loc, j6loc, css1loc);
-
-				panel.webview.onDidReceiveMessage(
+				cosmosStudio.panel.webview.onDidReceiveMessage(
 					async message => {
 						switch(message.command){
 							case 'newdatabase':
-								await CreateNewDatabase("FromVsCode2");
+								await cosmosStudio.CreateNewDatabase("FromVsCode2");
 								break;
 							case 'execute':
-								var response = await ExecuteQuery(message.conf.db,message.conf.cont,message.conf.q, message.conf.options);
-								panel.webview.postMessage({command:'load', response:response});								
+								var response = await cosmosStudio.ExecuteQuery(message.conf.db,message.conf.cont,message.conf.q, message.conf.options);
+								cosmosStudio.panel.webview.postMessage({command:'load', response:response});								
 								break;
 							case 'pointread':
-								var response = await PointRead(message.conf.db, message.conf.cont, message.conf.pkey,message.conf.id);
-								panel.webview.postMessage({command:'load', response:response});
-									break;
+								var response = await cosmosStudio.PointRead(message.conf.db, message.conf.cont, message.conf.pkey,message.conf.id);
+								cosmosStudio.panel.webview.postMessage({command:'load', response:response});
+								break;
+							case 'listsubs':
+								await cosmosStudio.GetSubscriptons().then((subs) =>{
+									cosmosStudio.panel.webview.postMessage({command:'listsubs', jsonData: subs});
+								});
+								break;
 							case 'init':								
-								await GetSubscriptons().then((subs) =>{
+								await cosmosStudio.GetSubscriptons().then((subs) =>{
 									if (subs == null)	{
-										vscode.window.showErrorMessage('Azure Token is expired.');
-										panel.webview.postMessage({command:'openconnectionbox'});
+										vscode.window.showErrorMessage('Azure Token is expired. Try to open the Terminal and type az login to generate token.');
+										cosmosStudio.panel.webview.postMessage({command:'openconnectionbox'});
 									}																											
 									if (subs != null  & subs.length > 0){		
-										panel.webview.postMessage({command:'subCount', jsonData: subs.length});																		
+										cosmosStudio.panel.webview.postMessage({command:'subCount', jsonData: subs.length});																		
 										for (var s=0; s< subs.length; s++){
 											var sid = subs[s].subscriptionId;
-											cosmosArmClient = new CosmosDBManagementClient(creds, sid);	
-											GetDatabaseAccounts(sid).then((dbacct)=>{
-												panel.webview.postMessage({command:'accCount', jsonData: dbacct.length});												
-												resClient = new ResourceManagementClient(creds, sid);
-												GetResourceGroups(sid).then((resources) =>{
-													panel.webview.postMessage({command:'resCount', jsonData: resources.length});
+											cosmosStudio.cosmosArmClient = new CosmosDBManagementClient(cosmosStudio.creds, sid);												
+											cosmosStudio.GetDatabaseAccounts(sid).then((dbacct)=>{
+												cosmosStudio.panel.webview.postMessage({command:'accCount', jsonData: dbacct.length});												
+												cosmosStudio.resClient = new ResourceManagementClient(cosmosStudio.creds, sid);
+												cosmosStudio.GetResourceGroups(sid).then((resources) =>{
+													cosmosStudio.panel.webview.postMessage({command:'resCount', jsonData: resources.length});
 													for (var d=0; d<dbacct.length; d++){
 														for (var g=0; g<resources.length; g++){	
-															GetConnectionString(resources[g].name, dbacct[d]).then((cstring)=>{
-																cosmosClient = new CosmosClient(cstring.connectionString);																
+															cosmosStudio.GetConnectionString(resources[g].name, dbacct[d]).then((cstring)=>{
+																cosmosStudio.cosmosClient = new CosmosClient(cstring.connectionString);
 															});
-															GetDatabases(sid,resources[g].name, dbacct[d]);
+															cosmosStudio.DiscoverDatabases(sid,resources[g].name, dbacct[d]);
 														}
 													}
 												});
@@ -298,25 +561,23 @@ async function activate(context) {
 										}
 									}
 								}, reason =>{
-									panel.webview.postMessage({command:"openconnectionbox", jsonData: reason});
+									cosmosStudio.panel.webview.postMessage({command:"openconnectionbox", jsonData: reason});
 									vscode.window.showErrorMessage(reason);
 								});							
 								break;
 							case 'cstring':
-								cosmosClient = new CosmosClient(message.conn);
-								GetDatabases2();
+								//cosmosStudio.cosmosClient = new CosmosClient(message.conn);
+								cosmosStudio.CreateConnection(message.conn);
+								cosmosStudio.GetDatabases();
 								break;
 							case 'findpartitions':
-								var partitions = await FindPhysicalPartitions(message.conf.db, message.conf.cont);
-								panel.webview.postMessage({command:"physicalpartitions", jsonData: partitions});
+								var partitions = await cosmosStudio.FindPhysicalPartitions(message.conf.db, message.conf.cont);
+								cosmosStudio.panel.webview.postMessage({command:"physicalpartitions", jsonData: partitions});
 								break;
 
 							case 'delete':
-								var result = await DeleteDocument(message.db, message.container, message.pkey, message.docid);
-								panel.webview.postMessage({command:"deleteresult", deleteresult: result});
-								//var deletelist = message.dlist;
-								//DeleteSproc(message.db, message.container);
-
+								var result = await cosmosStudio.DeleteDocument(message.db, message.container, message.pkey, message.docid);
+								cosmosStudio.panel.webview.postMessage({command:"deleteresult", deleteresult: result});
 						}
 					},
 					undefined,
@@ -326,7 +587,9 @@ async function activate(context) {
 	);	
 };
 
-function getWebviewContent(js1,js2,js3,js4,js5,js6,css1){
+function getWebviewContent(jslist,css1){
+	var scripts = "";
+	jslist.forEach(element => {scripts = scripts.concat(element)});
 	return `<!DOCTYPE html>
 	<html lang="en">
 	<head>
@@ -337,13 +600,8 @@ function getWebviewContent(js1,js2,js3,js4,js5,js6,css1){
 		<link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
 		integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A=="
 		crossorigin=""/>
-		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />		
-		<script src='` + js1 +`'></script>
-		<script src='` + js2 +`'></script>
-		<script src='` + js3 +`'></script>
-		<script src='` + js4 +`'></script>
-		<script src='` + js5 +`'></script>
-		<script src='` + js6 +`'></script>
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+		` + scripts +`		
 		<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"
    integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA=="
    crossorigin=""></script>
@@ -471,15 +729,15 @@ function getWebviewContent(js1,js2,js3,js4,js5,js6,css1){
 								</div>
 								<div style='display:flex; justify-content:space-around; color:black;align-items:center'>
 									<div>
-										<input id='barcharttype' checked='checked' type='radio' name='charttype' value='bar' onchange='TestChart()' style='vertical-align:middle'/>
+										<input id='barcharttype' checked='checked' type='radio' name='charttype' value='bar' onchange='cosmosStudioWeb.RenderChart()' style='vertical-align:middle'/>
 										<label for='barcharttype' style='vertical-align:middle'>Bar Chart</label>
 									</div>
 									<div style='margin: 0 5px'>
-										<input id='linecharttype' type='radio' name='charttype' value='line' onchange='TestChart()' style='vertical-align:middle'/>
+										<input id='linecharttype' type='radio' name='charttype' value='line' onchange='cosmosStudioWeb.RenderChart()' style='vertical-align:middle'/>
 										<label for='linecharttype' style='vertical-align:middle'>Line Chart</label>
 									</div>
 									<div>
-										<input id='piechartype' type='radio' name='charttype' value='doughnut' onchange='TestChart()' style='vertical-align:middle'/>
+										<input id='piechartype' type='radio' name='charttype' value='doughnut' onchange='cosmosStudioWeb.RenderChart()' style='vertical-align:middle'/>
 										<label for='piechartype' style='vertical-align:middle'>Pie Chart</label>
 									</div>
 								</div>
@@ -709,14 +967,19 @@ function getWebviewContent(js1,js2,js3,js4,js5,js6,css1){
 			<div style="width:50%">Containers :<span id='countCont'>0</span></div>
 		</div>
 	</dialog>
-    <dialog id='connectionbox' class='connectionbox'>
-        <div style="text-align: center;padding:0 0 5px 0; font-variant: small-caps; color:lightblue">
-            How do you want to connect to Azure Cosmos DB?
-        </div>
-		<div style="padding:5px 0;">
-            <input type='radio' id='connectByVs' name='connectoption'>
-            <label for='connectByVs'>Connect by VsCode Azure Account</label>
-        </div>  	
+    <dialog id='connectionbox' class='connectionbox'>		
+			<div style="text-align: center;padding:0 0 5px 0; font-variant: small-caps; color:lightblue">
+				How do you want to connect to Azure Cosmos DB?
+			</div>
+			<div style="padding:5px 0;">
+				<input type='radio' id='connectByVs' name='connectoption'>
+				<label for='connectByVs'>Connect by VsCode Azure Account</label>
+				<div>
+				<select id='mysubs' style='display:none' >
+					<option value=''>Select Subscription</option>
+				</select>
+				</div>
+			</div>
         <div style="padding:5px 0;">
             <input type="radio" id='connectBycstring' name='connectoption'/>
             <label for='connectBycstring'>Connect by a Connection String</label>
@@ -894,11 +1157,11 @@ function getWebviewContent(js1,js2,js3,js4,js5,js6,css1){
 	const vscode = acquireVsCodeApi();
 	var editor;
 	var resultbox = new JSONFormatter('',2,{theme:'dark', hoverPreviewEnabled:true});
-	var cosmosmap;
-	var currentdata = null;
+	var cosmosmap;	
 	var drawnItems = new L.FeatureGroup();
 
 	document.addEventListener("DOMContentLoaded", function(event){
+		//cosmosStudioWeb.FindSubscriptions();
 		document.getElementById("connectionbox").showModal();
 			editor = ace.edit("querysource",{
 				mode: "ace/mode/sql"
@@ -931,15 +1194,13 @@ function getWebviewContent(js1,js2,js3,js4,js5,js6,css1){
 			cosmosmap.addControl(drawControl);
 
 			cosmosmap.on(L.Draw.Event.CREATED, function(event){
-				AddItemToMap(event,drawnItems);
+				cosmosStudioWeb.AddItemToMap(event,drawnItems);
 			});
 
 			cosmosmap.on(L.Draw.Event.DELETED, function(event){				
-				RemoveItemsFromMap(event);
-			});
-			//TestChart();
-			RenderQueryResults(null);
-			
+				cosmosStudioWeb.RemoveItemsFromMap(event);
+			});			
+			cosmosStudioWeb.RenderQueryResults(null);			
 	});
 
 	document.getElementById('ConnectionBoxLink').addEventListener("click", function(){
@@ -949,11 +1210,11 @@ function getWebviewContent(js1,js2,js3,js4,js5,js6,css1){
 	});
 
 	document.getElementById('deleteButton').addEventListener("click", function(){
-		DeleteDataClicked();
+		cosmosStudioWeb.DeleteDataClicked();
 	});
 
 	document.getElementById('StartDeleteButton').addEventListener("click", function(){		
-		StartDeletingRows();
+		cosmosStudioWeb.StartDeletingRows();
 	});
 
 	document.getElementById("darkmodeToggle").addEventListener("click", function(){
@@ -969,16 +1230,16 @@ function getWebviewContent(js1,js2,js3,js4,js5,js6,css1){
 			resultbox.config.theme='dark';
 			document.getElementById('bottomcontainer').classList.remove('whitebackground');
 		}
-		RenderQueryResults(currentdata);
+		cosmosStudioWeb.RenderQueryResults(cosmosStudioWeb.currentdata);
 	});
 	
 	document.getElementById("RunQuery").addEventListener("click", function(){
-		HandleQueryExecution();
+		cosmosStudioWeb.HandleQueryExecution();
 	});	
 
 	document.getElementById("pointreadbutton").addEventListener("click", function(){
-		ClearExecutionMetrics();
-		PointRead();
+		cosmosStudioWeb.ClearExecutionMetrics();
+		cosmosStudioWeb.PointRead();
 	});
 
 	var tablinks = document.getElementsByClassName("tablink");
@@ -1012,11 +1273,10 @@ function getWebviewContent(js1,js2,js3,js4,js5,js6,css1){
 		document.getElementById("queryoptionsbox").showModal();
 	});
 
-	document.getElementById("PartitionListButton").addEventListener("click", function(){
-		//document.getElementById("physicalpartitionsdialog").showModal();
+	document.getElementById("PartitionListButton").addEventListener("click", function(){		
 		var db = document.getElementById('cosmosdblist').value;
 		var container = document.getElementById("cosmoscontainers").value;
-		FindPhysicalPartitions(db,container);
+		cosmosStudioWeb.FindPhysicalPartitions(db,container);
 	});
 
 	document.getElementById("partitionsexecutionclosebutton").addEventListener("click", function(){
@@ -1032,36 +1292,36 @@ function getWebviewContent(js1,js2,js3,js4,js5,js6,css1){
 	});
 
 	document.getElementById("schemalist").addEventListener("change",function(){		
-		TestChart();
+		cosmosStudioWeb.RenderChart();
 	});
 
 	document.getElementById("timelineschemalist").addEventListener("change",function(){		
-		TestChart();
+		cosmosStudioWeb.RenderChart();
 	});	
 
 	document.getElementById("ConnectButton").addEventListener("click", function(){
 		var cstring = document.getElementById("connectBycstring").checked;
-		HandleConnection(cstring);		
+		cosmosStudioWeb.HandleConnection(cstring);		
 	});
 
 	document.getElementById("PointReadLink").addEventListener("click", function(){
 		var dest = this.getAttribute('data-destination');
-		HandleInfoBoxes(dest);
+		cosmosStudioWeb.HandleInfoBoxes(dest);
 	});
 
 	document.getElementById("OverallLink").addEventListener("click", function(){
 		var dest = this.getAttribute('data-destination');
-		HandleInfoBoxes(dest);		
+		cosmosStudioWeb.HandleInfoBoxes(dest);		
 	});
 
 	document.getElementById("ExecutionMetricsLink").addEventListener("click", function(){
 		var dest = this.getAttribute('data-destination');
-		HandleInfoBoxes(dest);
+		cosmosStudioWeb.HandleInfoBoxes(dest);
 	});
 
 	document.getElementById("IndexinPolicyLink").addEventListener("click", function(){
 		var dest = this.getAttribute('data-destination');
-		HandleInfoBoxes(dest);
+		cosmosStudioWeb.HandleInfoBoxes(dest);
 	});
 
 	document.getElementById("numberOfPartitions").addEventListener("click", function(){
@@ -1073,12 +1333,12 @@ function getWebviewContent(js1,js2,js3,js4,js5,js6,css1){
 	
 	document.getElementById("cosmosdblist").addEventListener("change", function(){
 		var current = document.getElementById('cosmosdblist').value;
-		document.getElementById('cosmosdbpkeyname').innerHTML = 'Partition Key:';
-		DbChanged(current);
+		document.getElementById('cosmosdbpkeyname').innerHTML = 'Partition Key:';		
+		cosmosStudioWeb.DbChanged(current);
 	});		
 
 	document.getElementById("cosmoscontainers").addEventListener("change", function(){
-		ContainerChanged(this.value);
+		cosmosStudioWeb.ContainerChanged(this.value);
 	});
 
 	document.getElementById("optionEnableIndexingMetrics").addEventListener("change", function(){
@@ -1111,6 +1371,44 @@ function getWebviewContent(js1,js2,js3,js4,js5,js6,css1){
 	</html>`;
 };
 
+function deactivate() {}
+
+module.exports = {
+	activate,
+	deactivate
+};
+
+/*const js1 = vscode.Uri.file(
+					path.join(context.extensionPath,'webview1.js')
+				);
+				var js1loc = panel.webview.asWebviewUri(js1);
+
+				const jsonjs = vscode.Uri.file(
+					path.join(context.extensionPath,'/node_modules/json-formatter-js/dist/json-formatter.umd.js')
+				);
+				var js2loc = panel.webview.asWebviewUri(jsonjs);
+
+				const sqljs = vscode.Uri.file(
+					path.join(context.extensionPath,'/customJs/src-min-noconflict/ace.js')
+				);
+				var js3loc = panel.webview.asWebviewUri(sqljs);
+
+				const sqljs2 = vscode.Uri.file(
+					path.join(context.extensionPath,'/customJs/src-min-noconflict/mode-sql.js')
+				);
+				var js4loc = panel.webview.asWebviewUri(sqljs2);
+				const sqljs3 = vscode.Uri.file(
+					path.join(context.extensionPath,'/customJs/src-min-noconflict/ext-language_tools.js')
+				);
+				var js5loc = panel.webview.asWebviewUri(sqljs3);
+				
+				const chartjs = vscode.Uri.file(
+					path.join(context.extensionPath,'node_modules/chart.js/dist/chart.min.js')
+				);
+				var j6loc = panel.webview.asWebviewUri(chartjs);
+*/
+
+/*
 async function CreateNewDatabase(name){
 	try{
 		const {database} = await client.databases.createIfNotExists({id: name});
@@ -1120,8 +1418,155 @@ async function CreateNewDatabase(name){
 	catch(error){
 		vscode.window.showErrorMessage(error);
 	}	
-};
+};*/
 
+/*
+async function ExecuteQuery(dbname, containerid, query, options){
+	try{
+	var indexingmetrics= null;
+	if (options.populateIndexingMetrics){
+		indexingmetrics = await GetIndexMetrics(dbname, containerid, query);
+	}
+	//options.ConsistencyLevel = "Eventual";
+	const container = cosmosClient.database(dbname).container(containerid);	
+	const queryIterator = container.items.query(query, options);
+	let count = 0;
+	var cosmosResponse = await CreateNewCosmosResponseObj();
+	cosmosResponse.indexingMetrics = indexingmetrics;	
+	
+	while (queryIterator.hasMoreResults() && count <= 100000) {	
+		
+		const resources = await queryIterator.fetchNext();
+		//if (resources.requestCharge > 0){ 			cosmosResponse.requests++;		}
+		cosmosResponse.charge += Number(resources.headers['x-ms-request-charge']);
+		cosmosResponse.result = cosmosResponse.result.concat(resources.resources);		
+		if (resources.queryMetrics){			
+			for (const prop in resources.queryMetrics){				
+				if (resources.queryMetrics[prop]){
+					cosmosResponse.requests++;
+					cosmosResponse.queryMetrics.push(resources.queryMetrics[prop]);
+					cosmosResponse.qms.push(await CreateQueryMetrics(prop, resources.queryMetrics[prop]));					
+				}
+			}			
+		}
+	}	
+	return await HandleQueryMetricsCalculation(cosmosResponse);	
+}
+	catch(e){
+		cosmosResponse.hasError = true;
+		cosmosResponse.error = await HandleErrorTxt(e.message);		
+		return cosmosResponse;
+	}
+};*/
+
+/*
+async function GetIndexMetrics(dbname, containername, query){
+	var hashed = await HashIt(query);
+	if (lastindexingmetrics.db == dbname && lastindexingmetrics.container == containername && lastindexingmetrics.result && lastindexingmetrics.queryhash == hashed){
+		return lastindexingmetrics.result;
+	} else {
+		lastindexingmetrics.db = dbname;
+		lastindexingmetrics.container = containername;
+		lastindexingmetrics.queryhash = await HashIt(query);
+	}	
+	var q ={
+		query:query,
+		parameters:[]
+	}	
+	var dt = cosmosClient.database(dbname);
+	var endpoint = dt.clientContext.cosmosClientOptions.endpoint;
+	var key = dt.clientContext.cosmosClientOptions.key;
+	var url = endpoint +"/dbs/" + dbname + "/colls/"+ containername + "/docs";
+	var pkeyrange = null;
+	if (pkeyranges.dbname == dbname && pkeyranges.container == containername && pkeyranges.partitions){
+		pkeyrange = pkeyranges.partitions.PartitionKeyRanges[0].id;
+	} else {
+		await FindPhysicalPartitions(dbname, containername);
+		pkeyrange = pkeyranges.partitions.PartitionKeyRanges[0].id;
+	}
+	lastindexingmetrics.result = "N/A";
+	var response = await fetch(url,
+		{
+			method: 'POST',
+			headers: await CreateRequiredHeadersforApi('POST', dbname, containername, key, true,pkeyrange),
+			body: JSON.stringify(q)
+		}); //.then(response=>response.json());
+		//check the status to continue
+		if (response.ok){
+			var indexmetrics = response.headers.get('x-ms-cosmos-index-utilization');
+			if (indexmetrics){
+				var result = Buffer.from(indexmetrics,'base64').toString();
+				lastindexingmetrics.result = JSON.parse(result);
+			}
+		}		
+	return lastindexingmetrics.result
+}*/
+
+/*async function HashIt(value){	
+		return value.split("").reduce(function(a,b){a=((a<<5)-a)+b.charCodeAt(0);return a&a},0);	 
+}*/
+
+/*var lastindexingmetrics = {
+	db:'', container:'', queryhash:'', result:{}
+};*/
+
+/*var pkeyranges = {
+	dbname: null,
+	container:null,
+	partitions:undefined
+};*/
+
+/*
+async function FindPhysicalPartitions(dbname, containername){
+	var dt = cosmosClient.database(dbname);
+	var endpoint = dt.clientContext.cosmosClientOptions.endpoint;
+	var key = dt.clientContext.cosmosClientOptions.key;
+	var url = endpoint +"/dbs/" + dbname + "/colls/"+ containername + "/pkranges";
+	pkeyranges.dbname = dbname;
+	pkeyranges.container = containername;
+	pkeyranges.partitions = await fetch(url,
+	{
+		method: 'GET',
+		headers: await CreateRequiredHeadersforApi('GET', dbname, containername, key, false)		
+	}).then(response=>response.json());
+	return pkeyranges.partitions;
+}*/
+
+/*
+async function CreateRequiredHeadersforApi(action, dbname, containername, key, forquery, pkeyrangeid){
+	var now = new Date().toUTCString();	
+	var rtype = "pkranges";
+	if (forquery){
+		var rtype = "docs";
+	}
+	var rid = "dbs/" + dbname + "/colls/" + containername;
+	var text = (action || "").toLowerCase() + "\n" + (rtype || "").toLowerCase() + "\n" + (rid || "") + "\n" + now.toLowerCase() + "\n" + "" + "\n";
+	var key = cryptoJs.enc.Base64.parse(key);
+	var signature = cryptobase.HmacSHA256(text,key).toString(cryptoJs.enc.Base64);
+	var MasterToken = "master";
+	var TokenVersion = "1.0";
+	var authToken = encodeURIComponent("type=" + MasterToken + "&ver=" + TokenVersion + "&sig=" + signature);	
+	var headers = new fetch.Headers({
+		'authorization':authToken,
+		'x-ms-date':now,
+		'x-ms-version':'2018-12-31'
+		//'x-ms-cosmos-populateindexmetrics':true
+	});	
+	if (forquery){
+		headers.append('Content-Type','application/query+json');
+		headers.append('x-ms-documentdb-isquery', true);
+		headers.append('x-ms-documentdb-query-enablecrosspartition',true);
+		headers.append('x-ms-cosmos-populateindexmetrics',true);		
+	} else{
+		headers.append('Content-Type','application/json');
+	}
+	if (pkeyrangeid){
+		headers.append('x-ms-documentdb-partitionkeyrangeid',pkeyrangeid);
+	}
+	return headers;
+}*/
+
+/*
 async function CreateNewCosmosResponseObj(){
 	return {
 		result:[],
@@ -1161,8 +1606,9 @@ async function CreateNewCosmosResponseObj(){
 			requestUnits:0
 		}
 	};
-}
+}*/
 
+/*
 async function HandleQueryMetricsCalculation(cosmosResponse){
 	for (var q=0;q<cosmosResponse.queryMetrics.length; q++){
 		if (cosmosResponse.queryMetrics[q])		{
@@ -1205,48 +1651,27 @@ async function HandleQueryMetricsCalculation(cosmosResponse){
 	cosmosResponse.count = cosmosResponse.result.length;
 	cosmosResponse.qm.numberofpartition = cosmosResponse.queryMetrics.length;
 	return cosmosResponse;
-}
+}*/
 
-async function ExecuteQuery(dbname, containerid, query, options){
-	try{
-	var indexingmetrics= null;
-	if (options.populateIndexingMetrics){
-		indexingmetrics = await GetIndexMetrics(dbname, containerid, query);
+/*
+async function TakeAverage(number, counter){
+	if (number == 0){
+		return 0;
 	}
-	//options.ConsistencyLevel = "Eventual";
-	const container = cosmosClient.database(dbname).container(containerid);	
-	const queryIterator = container.items.query(query, options);
-	let count = 0;
-	var cosmosResponse = await CreateNewCosmosResponseObj();
-	cosmosResponse.indexingMetrics = indexingmetrics;	
-	
-	while (queryIterator.hasMoreResults() && count <= 100000) {	
-		
-		const resources = await queryIterator.fetchNext();
-		/*if (resources.requestCharge > 0){
-			cosmosResponse.requests++;
-		}*/
-		cosmosResponse.charge += Number(resources.headers['x-ms-request-charge']);
-		cosmosResponse.result = cosmosResponse.result.concat(resources.resources);		
-		if (resources.queryMetrics){			
-			for (const prop in resources.queryMetrics){				
-				if (resources.queryMetrics[prop]){
-					cosmosResponse.requests++;
-					cosmosResponse.queryMetrics.push(resources.queryMetrics[prop]);
-					cosmosResponse.qms.push(await CreateQueryMetrics(prop, resources.queryMetrics[prop]));					
-				}
-			}			
-		}
-	}	
-	return await HandleQueryMetricsCalculation(cosmosResponse);	
-}
-	catch(e){
-		cosmosResponse.hasError = true;
-		cosmosResponse.error = await HandleErrorTxt(e.message);		
-		return cosmosResponse;
-	}
-};
+	return number / counter;
+}*/
 
+/*
+async function formatBytes(bytes,decimals =2){
+	if (bytes === 0) return '0 Bytes';
+	const k = 1024;
+	const dm = decimals <0 ? 0 : decimals;
+	const sizes = ['Bytes', 'KB', 'MB','GB'];
+	const i = Math.floor(Math.log(bytes) / Math.log(k));
+	return parseFloat((bytes / Math.pow(k,i)).toFixed(dm))+ ' ' + sizes[i];
+};*/
+
+/*
 async function CreateQueryMetrics(pid, qmetrics){
 	return {
 		partitionid :pid,
@@ -1269,16 +1694,9 @@ async function CreateQueryMetrics(pid, qmetrics){
 		vmExecutionTime : qmetrics.vmExecutionTime._ticks/10000,
 		requestUnits: qmetrics.clientSideMetrics.requestCharge
 	};
-};
+};*/
 
-async function TakeAverage(number, counter){
-	if (number == 0){
-		return 0;
-	}
-	return number / counter;
-}
-
-async function HandleErrorTxt(message){
+/*async function HandleErrorTxt(message){
 	try{
 		var custom = message.replace("Message: ","");
 		custom = custom.slice(0, custom.indexOf('\r'));
@@ -1287,9 +1705,9 @@ async function HandleErrorTxt(message){
 	catch (e){
 		return message;
 	}	
-}
+}*/
 
-async function PointRead(dbname, containerid, pkey, id){
+/*async function PointRead(dbname, containerid, pkey, id){
 	const container = cosmosClient.database(dbname).container(containerid);
 	//var temp =await container.readPartitionKeyDefinition();
 	var isNumber = Number(pkey);
@@ -1306,146 +1724,165 @@ if (resource.statusCode = 404 && isNumber){
 	};
 	return cosmosResponse;
 
-};
-
-async function formatBytes(bytes,decimals =2){
-	if (bytes === 0) return '0 Bytes';
-	const k = 1024;
-	const dm = decimals <0 ? 0 : decimals;
-	const sizes = ['Bytes', 'KB', 'MB','GB'];
-	const i = Math.floor(Math.log(bytes) / Math.log(k));
-	return parseFloat((bytes / Math.pow(k,i)).toFixed(dm))+ ' ' + sizes[i];
-};
-
-async function CreateRequiredHeadersforApi(action, dbname, containername, key, forquery, pkeyrangeid){
-	var now = new Date().toUTCString();	
-	var rtype = "pkranges";
-	if (forquery){
-		var rtype = "docs";
-	}
-	var rid = "dbs/" + dbname + "/colls/" + containername;
-	var text = (action || "").toLowerCase() + "\n" + (rtype || "").toLowerCase() + "\n" + (rid || "") + "\n" + now.toLowerCase() + "\n" + "" + "\n";
-	var key = cryptoJs.enc.Base64.parse(key);
-	var signature = cryptobase.HmacSHA256(text,key).toString(cryptoJs.enc.Base64);
-	var MasterToken = "master";
-	var TokenVersion = "1.0";
-	var authToken = encodeURIComponent("type=" + MasterToken + "&ver=" + TokenVersion + "&sig=" + signature);	
-	var headers = new fetch.Headers({
-		'authorization':authToken,
-		'x-ms-date':now,
-		'x-ms-version':'2018-12-31'
-		//'x-ms-cosmos-populateindexmetrics':true
-	});	
-	if (forquery){
-		headers.append('Content-Type','application/query+json');
-		headers.append('x-ms-documentdb-isquery', true);
-		headers.append('x-ms-documentdb-query-enablecrosspartition',true);
-		headers.append('x-ms-cosmos-populateindexmetrics',true);		
-	} else{
-		headers.append('Content-Type','application/json');
-	}
-	if (pkeyrangeid){
-		headers.append('x-ms-documentdb-partitionkeyrangeid',pkeyrangeid);
-	}
-	return headers;
-}
-
-async function FindPhysicalPartitions(dbname, containername){
-	var dt = cosmosClient.database(dbname);
-	var endpoint = dt.clientContext.cosmosClientOptions.endpoint;
-	var key = dt.clientContext.cosmosClientOptions.key;
-	var url = endpoint +"/dbs/" + dbname + "/colls/"+ containername + "/pkranges";
-	pkeyranges.dbname = dbname;
-	pkeyranges.container = containername;
-	pkeyranges.partitions = await fetch(url,
-	{
-		method: 'GET',
-		headers: await CreateRequiredHeadersforApi('GET', dbname, containername, key, false)		
-	}).then(response=>response.json());
-	return pkeyranges.partitions;
-}
-
-async function GetIndexMetrics(dbname, containername, query){
-	var hashed = await HashIt(query);
-	if (lastindexingmetrics.db == dbname && lastindexingmetrics.container == containername && lastindexingmetrics.result && lastindexingmetrics.queryhash == hashed){
-		return lastindexingmetrics.result;
-	} else {
-		lastindexingmetrics.db = dbname;
-		lastindexingmetrics.container = containername;
-		lastindexingmetrics.queryhash = await HashIt(query);
-	}	
-	var q ={
-		query:query,
-		parameters:[]
-	}	
-	var dt = cosmosClient.database(dbname);
-	var endpoint = dt.clientContext.cosmosClientOptions.endpoint;
-	var key = dt.clientContext.cosmosClientOptions.key;
-	var url = endpoint +"/dbs/" + dbname + "/colls/"+ containername + "/docs";
-	var pkeyrange = null;
-	if (pkeyranges.dbname == dbname && pkeyranges.container == containername && pkeyranges.partitions){
-		pkeyrange = pkeyranges.partitions.PartitionKeyRanges[0].id;
-	} else {
-		await FindPhysicalPartitions(dbname, containername);
-		pkeyrange = pkeyranges.partitions.PartitionKeyRanges[0].id;
-	}
-	lastindexingmetrics.result = "N/A";
-	var response = await fetch(url,
-		{
-			method: 'POST',
-			headers: await CreateRequiredHeadersforApi('POST', dbname, containername, key, true,pkeyrange),
-			body: JSON.stringify(q)
-		}); //.then(response=>response.json());
-		//check the status to continue
-		if (response.ok){
-			var indexmetrics = response.headers.get('x-ms-cosmos-index-utilization');
-			if (indexmetrics){
-				var result = Buffer.from(indexmetrics,'base64').toString();
-				lastindexingmetrics.result = JSON.parse(result);
-			}
-		}		
-	return lastindexingmetrics.result
-}
-
-async function HashIt(value){	
-		return value.split("").reduce(function(a,b){a=((a<<5)-a)+b.charCodeAt(0);return a&a},0);	 
-}
+};*/
 
 /*
-async function DeleteSproc(dbname, containerid){
-	await DeleteDocument(dbname, containerid,0,0);
-	const container = cosmosClient.database(dbname).container(containerid);
-	var exists = false;
-	try {
-	var sproc = await container.scripts.storedProcedure('Delete').read().then((results) =>{
-		// Found
-		exists = results;
-
-	}).catch((e)=> {
-		console.log(e);
-		if (e.code == 404){
-			// Not Found
-		}
-	});
-}
-catch(e){
-	console.log(e);
-}
-	return sproc;
-
-}*/
-
 async function DeleteDocument(dbname, containerid, pkey, docid){	
 	const container = cosmosClient.database(dbname).container(containerid);
 	var item = await container.item(docid, pkey); //.read();	
 	var result = await item.delete();
 	return {pkey: pkey, id:docid, status: result.statusCode, ru: result.requestCharge}
 	//return result.statusCode == 204;
+}*/
+
+/*async function GetDatabases2(){	
+	var requestOptions ={};
+	requestOptions.populateQuotaInfo=true;
+	var { resources} = await cosmosClient.databases.readAll().fetchAll();
+	panel.webview.postMessage({command:'dbCount', jsonData: resources.length});
+	for (var i=0; i<resources.length; i++){
+		var info ={}; // = (({consistencyPolicy, enableAnalyticalStorage, enableAutomaticFailover, enableFreeTier, location, backupPolicy}) => ({ consistencyPolicy, enableAnalyticalStorage, enableAutomaticFailover, enableFreeTier, location, backupPolicy}))(account);
+		info.name = resources[i].id;
+		panel.webview.postMessage({command:'addDb', jsonData: info});		
+		var temp = await cosmosClient.database(resources[i].id).containers.readAll({populateQuotaInfo:true}).fetchAll();
+		//var test = await cosmosClient.database(resources[i].id).container(temp.resources[0].id).read({populateQuotaInfo:true});
+		var containerList = temp.resources;		
+		for (var c=0; c< containerList.length;c++){			
+			panel.webview.postMessage({command:'contCount', jsonData: containerList.length});
+			panel.webview.postMessage({command:'addCon', jsonData: {
+				container: containerList[c].id, 
+				db: resources[i].id, 
+				pkey: containerList[c].partitionKey.paths[0], 
+				indexing: containerList[c].indexingPolicy,
+				conflict: containerList[c].conflictResolutionPolicy.mode
+			}});
+		}	
+	}
+};	*/
+
+/*
+async function GetSubscriptons(){	
+	return subClient.subscriptions.list().then((result) => {
+		myAzure.subs = result;
+		return result;
+	}).catch((err) => {	
+		vscode.window.showErrorMessage(err.message);	
+	  	//console.error(err);
+	  	return null;
+	});
+};*/
+
+/*
+async function GetDatabaseAccounts(){	
+	return await cosmosArmClient.databaseAccounts.list().then((result) => {
+		myAzure.accounts.push(result);		
+		return result;
+	  }).catch((err) => {		
+		console.error(err);
+		return null;
+	  });
+};*/
+
+/*
+async function GetResourceGroups(){	
+	return resClient.resourceGroups.list().then((result) => {
+		myAzure.rgroups.push(result);	  
+		return result;
+	}).catch((err) => {		
+		console.error(err);
+		return null;
+	  });
+};*/
+
+/*
+var myAzure ={
+	subs:[],
+	rgroups :[],
+	accounts:[],
+	dbs:[],
+	cstring:[]
+};*/
+
+/*async function GetConnectionString(rgroup, dbacct){
+	return cosmosArmClient.databaseAccounts.listConnectionStrings(rgroup,dbacct.name).then((cstr)=>{
+		myAzure.cstring.push(cstr);
+		var temp = cstr.connectionStrings.filter(function(a){return a.description == "Primary Read-Only SQL Connection String"});
+		return temp[0];
+	});
+}*/
+
+/*
+async function GetDatabases(subid,rgroup, account){	
+	return await cosmosArmClient.sqlResources.listSqlDatabases(rgroup,account.name).then((result)=>{
+		panel.webview.postMessage({command:'dbCount', jsonData: result.length});
+		for (var d=0; d<result.length; d++){			
+			var info = (({consistencyPolicy, enableAnalyticalStorage, enableAutomaticFailover, enableFreeTier, location, backupPolicy}) => ({ consistencyPolicy, enableAnalyticalStorage, enableAutomaticFailover, enableFreeTier, location, backupPolicy}))(account);
+			info.name = result[d].name;
+			panel.webview.postMessage({command:'addDb', jsonData: info});
+			GetContainers(rgroup,account.name,result[d].name, subid, result[d].resource._rid);
+		}		
+		return result;		
+	}).catch((err)=>{
+		console.log(err);
+		return null;
+	});
+};*/
+
+
+/*async function GetContainers(rgroup, account, dbname, subid, testrid){
+	//const client2 = new CosmosDBManagementClient(creds, subid);		
+	cosmosArmClient.sqlResources.listSqlContainers(rgroup,account,dbname).then((result) =>{
+		if (result.length > 0){
+			panel.webview.postMessage({command:'contCount', jsonData: result.length});
+			var dbarm = CreateAzureArmItem(subid, rgroup, account, dbname,[]);
+			for (var c=0; c<result.length; c++){
+				var cont = {
+					container: result[c].name, 
+						db: dbname, 
+						pkey: result[c].resource.partitionKey.paths[0], 
+						indexing: result[c].resource.indexingPolicy,
+						conflict: result[c].resource.conflictResolutionPolicy.mode,
+						ukey: 'Not Found'
+				}
+				if (result[c].resource.uniqueKeyPolicy != undefined){
+					cont.ukey = result[c].resource.uniqueKeyPolicy.uniqueKeys[0].paths[0]
+				} 			
+				panel.webview.postMessage({
+					command:'addCon', 
+					jsonData: cont
+				});
+				dbarm.colls.push({name: result[c].name, pkey: result[c].resource.partitionKey.paths[0], indexing: result[c].resource.indexingPolicy});
+				
+			}
+			cosmosMaster.push(dbarm);
+			//console.log(dbarm);
+		}
+		
+		
+	}).catch((err) => {
+		console.log(err);
+	});
+};*/
+
+/*
+function CreateAzureArmItem(subid,rgroup,account,dbname,colls){
+	return {
+		subscription: subid,
+		resGrp: rgroup,
+		dbAcct: account,
+		dbName: dbname,
+		colls: colls
+		};
+};*/
+
+/*
+async function HandleToken(){
+	await creds.getToken(); //'https://login.microsoftonline.com/.default');
 }
+*/
 
-function deactivate() {}
-
-module.exports = {
-	activate,
-	deactivate
-};
+//var subClient = new SubscriptionClient(creds);
+//var resClient;
+//var cosmosArmClient;
+//var panel;
+//var cosmosMaster = [];
