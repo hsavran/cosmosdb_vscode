@@ -88,3 +88,6 @@ I hope you will enjoy to query Cosmos DB SQL API from VS Code.
 * Index Hit Documents value is rounded to 2 decimals
 * Indexing Metrics bug is fixed.
 * Delete function is added.
+
+## 0.0.46
+* Delete function supports single physical partitions

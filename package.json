@@ -6,7 +6,7 @@
 	"author": {
 		"name": "Hasan Savran"
 	},
-	"version": "0.0.41",
+	"version": "0.0.46",
 	"engines": {
 		"vscode": "^1.60.0"
 	},
