@@ -228,7 +228,36 @@ cosmosStudio.ExecuteQuery = async function(dbname, containerid, query, options){
 	}
 };
 
+cosmosStudio.GetReIndexingStatus = async function(dbname, containername){
+	var dt = cosmosStudio.cosmosClient.database(dbname);
+	var endpoint = dt.clientContext.cosmosClientOptions.endpoint;
+	var key = dt.clientContext.cosmosClientOptions.key;
+	var url = endpoint +"/dbs/" + dbname + "/colls/"+ containername;
+	var reindexing = 100;
+	/*var pkeyrange = null;
+	if (cosmosStudio.pkeyranges.dbname == dbname && cosmosStudio.pkeyranges.container == containername && cosmosStudio.pkeyranges.partitions){
+		pkeyrange = cosmosStudio.pkeyranges.partitions.PartitionKeyRanges[0].id;
+	} else {
+		await cosmosStudio.FindPhysicalPartitions(dbname, containername);
+		pkeyrange = cosmosStudio.pkeyranges.partitions.PartitionKeyRanges[0].id;
+	}*/
+	//for (var i=0; i<cosmosStudio.pkeyranges.partitions.PartitionKeyRanges.length; i++){
+		//var pkeyid = cosmosStudio.pkeyranges.partitions.PartitionKeyRanges[i].id;
+		var response = await fetch(url,
+			{
+				method: 'GET',
+				headers: await cosmosStudio.CreateRequiredHeadersforApi('GET', dbname, containername, key, 'colls')
+			}); 
+			if (response.ok){
+				reindexing = Number.parseInt(response.headers.get('x-ms-documentdb-collection-index-transformation-progress'));
+				
+			}
+	//}
+	return reindexing;
+};
+
 cosmosStudio.GetIndexMetrics = async function(dbname, containername, query){
+	await cosmosStudio.GetReIndexingStatus(dbname, containername);
 	var hashed = await cosmosStudio.HashIt(query);
 	if (cosmosStudio.lastindexingmetrics.db == dbname && cosmosStudio.lastindexingmetrics.container == containername && cosmosStudio.lastindexingmetrics.result && cosmosStudio.lastindexingmetrics.queryhash == hashed){
 		return cosmosStudio.lastindexingmetrics.result;
@@ -256,7 +285,7 @@ cosmosStudio.GetIndexMetrics = async function(dbname, containername, query){
 	var response = await fetch(url,
 		{
 			method: 'POST',
-			headers: await cosmosStudio.CreateRequiredHeadersforApi('POST', dbname, containername, key, true,pkeyrange),
+			headers: await cosmosStudio.CreateRequiredHeadersforApi('POST', dbname, containername, key, 'docs',pkeyrange),
 			body: JSON.stringify(q)
 		}); //.then(response=>response.json());
 		//check the status to continue
@@ -284,17 +313,13 @@ cosmosStudio.FindPhysicalPartitions = async function(dbname, containername){
 	cosmosStudio.pkeyranges.partitions = await fetch(url,
 	{
 		method: 'GET',
-		headers: await cosmosStudio.CreateRequiredHeadersforApi('GET', dbname, containername, key, false)		
+		headers: await cosmosStudio.CreateRequiredHeadersforApi('GET', dbname, containername, key, 'pkranges')
 	}).then(response=>response.json());
 	return cosmosStudio.pkeyranges.partitions;
 };
 
-cosmosStudio.CreateRequiredHeadersforApi = async function(action, dbname, containername, key, forquery, pkeyrangeid){
+cosmosStudio.CreateRequiredHeadersforApi = async function(action, dbname, containername, key, rtype, pkeyrangeid){
 	var now = new Date().toUTCString();	
-	var rtype = "pkranges";
-	if (forquery){
-		var rtype = "docs";
-	}
 	var rid = "dbs/" + dbname + "/colls/" + containername;
 	var text = (action || "").toLowerCase() + "\n" + (rtype || "").toLowerCase() + "\n" + (rid || "") + "\n" + now.toLowerCase() + "\n" + "" + "\n";
 	var key = cryptoJs.enc.Base64.parse(key);
@@ -305,16 +330,17 @@ cosmosStudio.CreateRequiredHeadersforApi = async function(action, dbname, contai
 	var headers = new fetch.Headers({
 		'authorization':authToken,
 		'x-ms-date':now,
-		'x-ms-version':'2018-12-31'
-		//'x-ms-cosmos-populateindexmetrics':true
+		'x-ms-version':'2018-12-31'		
 	});	
-	if (forquery){
+	if (rtype == 'docs'){
 		headers.append('Content-Type','application/query+json');
 		headers.append('x-ms-documentdb-isquery', true);
 		headers.append('x-ms-documentdb-query-enablecrosspartition',true);
-		headers.append('x-ms-cosmos-populateindexmetrics',true);		
+		headers.append('x-ms-cosmos-populateindexmetrics',true);
+		
 	} else{
 		headers.append('Content-Type','application/json');
+		headers.append('x-ms-documentdb-populatequotainfo',true);
 	}
 	if (pkeyrangeid){
 		headers.append('x-ms-documentdb-partitionkeyrangeid',pkeyrangeid);
@@ -481,7 +507,7 @@ cosmosStudio.DeleteDocument = async function(dbname, containerid, pkey, docid){
 };
 
 async function activate(context) {
-	cosmosStudio.init();
+	//cosmosStudio.init();
 	context.subscriptions.push(
 		vscode.commands.registerCommand('cosmosdb.openEditor', () => {
 			const columnToShownIn = vscode.window.activeTextEditor
@@ -498,20 +524,55 @@ async function activate(context) {
 						enableScripts: true,
 						retainContextWhenHidden:true
 					});
-				}
+				}/*
 				var jslocs = [];
 				cosmosStudio.jslibs.forEach((jslib)=>{ 
 					var loc = vscode.Uri.file(path.join(context.extensionPath,jslib));
 					var scr = '<script src="'+ cosmosStudio.panel.webview.asWebviewUri(loc)+'"></script>';
 					jslocs.push(scr);
-				});				
+				});
+				const css1 = vscode.Uri.file(
+					path.join(context.extensionPath,'webview.css')
+				);
+				var cssloc = cosmosStudio.panel.webview.asWebviewUri(css1);
+				const js1 = vscode.Uri.file(
+					path.join(context.extensionPath,'webview1.js')
+				);*/
+				const js1 = vscode.Uri.file(
+					path.join(context.extensionPath,'webview1.js')
+				);
+				var js1loc = cosmosStudio.panel.webview.asWebviewUri(js1);
 
 				const css1 = vscode.Uri.file(
 					path.join(context.extensionPath,'webview.css')
 				);
-				var cssloc = cosmosStudio.panel.webview.asWebviewUri(css1);				
+				var css1loc = cosmosStudio.panel.webview.asWebviewUri(css1);
 
-				cosmosStudio.panel.webview.html = getWebviewContent(jslocs, cssloc);
+				const jsonjs = vscode.Uri.file(
+					path.join(context.extensionPath,'/node_modules/json-formatter-js/dist/json-formatter.umd.js')
+				);
+				var js2loc = cosmosStudio.panel.webview.asWebviewUri(jsonjs);
+
+				const sqljs = vscode.Uri.file(
+					path.join(context.extensionPath,'/customJs/src-min-noconflict/ace.js')
+				);
+				var js3loc = cosmosStudio.panel.webview.asWebviewUri(sqljs);
+
+				const sqljs2 = vscode.Uri.file(
+					path.join(context.extensionPath,'/customJs/src-min-noconflict/mode-sql.js')
+				);
+				var js4loc = cosmosStudio.panel.webview.asWebviewUri(sqljs2);
+				const sqljs3 = vscode.Uri.file(
+					path.join(context.extensionPath,'/customJs/src-min-noconflict/ext-language_tools.js')
+				);
+				var js5loc = cosmosStudio.panel.webview.asWebviewUri(sqljs3);
+				
+				const chartjs = vscode.Uri.file(
+					path.join(context.extensionPath,'node_modules/chart.js/dist/chart.min.js')
+				);
+				var j6loc = cosmosStudio.panel.webview.asWebviewUri(chartjs);
+
+				cosmosStudio.panel.webview.html = getWebviewContent(js1loc,js2loc,js3loc,js4loc,js5loc, j6loc, css1loc);
 
 				cosmosStudio.panel.webview.onDidReceiveMessage(
 					async message => {
@@ -578,6 +639,11 @@ async function activate(context) {
 							case 'delete':
 								var result = await cosmosStudio.DeleteDocument(message.db, message.container, message.pkey, message.docid);
 								cosmosStudio.panel.webview.postMessage({command:"deleteresult", deleteresult: result});
+								break;
+							case 'checkreindexing':
+								var reindexing = await cosmosStudio.GetReIndexingStatus(message.conf.db, message.conf.cont);
+								cosmosStudio.panel.webview.postMessage({command:"reindexingsult", jsonData: reindexing});
+								break;
 						}
 					},
 					undefined,
@@ -587,27 +653,33 @@ async function activate(context) {
 	);	
 };
 
-function getWebviewContent(jslist,css1){
-	var scripts = "";
-	jslist.forEach(element => {scripts = scripts.concat(element)});
-	return `<!DOCTYPE html>
+function getWebviewContent(js1,js2,js3,js4,js5,js6,css1){
+	/*var scripts = "";
+	jslist.forEach(element => {scripts = scripts.concat(element)});*/
+	var head = `<!DOCTYPE html>
 	<html lang="en">
 	<head>
 		<meta charset="UTF-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
 		<title>Cosmos DB SQL</title>
-		<link rel="stylesheet" href='` + css1 +`'/>
 		<link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
 		integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A=="
 		crossorigin=""/>
-		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
-		` + scripts +`		
-		<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"
-   integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA=="
-   crossorigin=""></script>
-   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
-	</head>
-	<body>
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />`;
+		head += `<link rel="stylesheet" href='` + css1 +`'/>`;
+		head += `<script src='` + js1 +`'></script>`;
+		head += `<script src='` + js2 +`'></script>`;
+		head += `<script src='` + js3 +`'></script>`;
+		head += `<script src='` + js4 +`'></script>`;
+		head += `<script src='` + js5 +`'></script>`;
+		head += `<script src='` + js6 +`'></script>`;
+		head += `<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"
+		integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA=="
+		crossorigin=""></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+		 </head>`;
+		
+	var body = `<body>
         <div class="maingridcontainer">
             <div class="containergriditem connectcontainer">
                 <div>
@@ -619,7 +691,7 @@ function getWebviewContent(jslist,css1){
                 <div>
                     <label>Container :</label>
                     <select id="cosmoscontainers"></select>					
-					<input type="button" id="PartitionListButton" disabled='disabled' title="Select Database and Container to see the list of physical partitions" value="Partition List" class="commandbutton"/>
+					<input type="button" id="PartitionListButton" disabled='disabled' title="Select Database and Container to see the list of physical partitions" value="Partitions" class="commandbutton"/>
                 </div>
                 <div>					
                     <input type="button" id="QueryOptionsButton" value="Options" class="commandbutton"/>
@@ -637,7 +709,7 @@ function getWebviewContent(jslist,css1){
 						<div><input id='cosmosdbpkey' type="text"/></div>
 						<div><label>Document Id<label></div>
 						<div><input id='cosmosdbid' type="text"/></div>
-						<div><input id='pointreadbutton' type="button" value="Point Read" class="commandbutton" /></div>
+						<div><input id='pointreadbutton' type="button" value="Read" class="commandbutton" /></div>
 					</div>
 				</div>
 				<div class="MetricsTabs">
@@ -666,7 +738,7 @@ function getWebviewContent(jslist,css1){
 				<div class='tablink' data-destination='spatialresults'>Map</div>
 				<div class='tablink' data-destination='analyzeresults'>Data Analyzer</div>
 				<div class='tablink' data-destination='qanalyzer'>Query Analyzer</div>
-				<div id='deleteButton' style='background: whitesmoke;padding: 3px 5px;position: fixed;right: 120px;margin: 4px 0 0 0;border-radius: 3px;color: black;' data-flag='1'>Delete</div>
+				<div id='deleteButton' style='background: whitesmoke;padding: 2px 5px;position: fixed;right: 120px;margin: 5px 0 0 0;border-radius: 3px;color: black;' data-flag='1'>Delete</div>
 				<div id='darkmodeToggle' style='position:fixed; right:10px;color:black' class='toggle1 toggle1selected' data-flag='1'>Dark Mode</div>
 			</div>
             <div id='bottomcontainer' class="containergriditem bottomcontainer">
@@ -825,6 +897,11 @@ function getWebviewContent(jslist,css1){
                             <div>Mode</div>
                             <span id='indexingMode'></span>
                         </div>
+						<div class='sameline withborder'>			
+                            <div>Re-Indexing Progress</div>
+                            <progress id='reindexingprogress' max='100' value='100' style='height:20px'></progress>
+							<span id='reindexingprogresstxt' style='font-size:10px'></span>
+                        </div>
 						<div class="samegroup">
                             <div class="alignleft">Included Properties</div>
                             <div id="includedPaths" style='font-weight:bold'></div>
@@ -936,7 +1013,7 @@ function getWebviewContent(jslist,css1){
                     <div class="metricstablink" id='ExecutionMetricsLink' data-destination='ExecutionMetricsBox'>
                         <span>Execution Metrics</span>				
                     </div>
-                    <div class="metricstablink" id='IndexinPolicyLink' data-destination='IndexingPolicyBox'>
+                    <div class="metricstablink" id='IndexingPolicyLink' data-destination='IndexingPolicyBox'>
                         <span>Indexing Policy</span>
                     </div>
                 </div>                
@@ -1098,7 +1175,7 @@ function getWebviewContent(jslist,css1){
 			<tbody id='partitionlistrows'>				
 			</tbody>
 		</table>
-		<div style='padding: 5px 0; text-align:center'>
+		<div style='text-align:center; background:#101040; padding: 2px 0 0 0'>
 			<input type='button' class='commandbutton' id='physicalpartitionsclosebutton' value='Close' onclick='document.getElementById("physicalpartitionsdialog").close();'/>
 		</div>
 	</dialog>
@@ -1265,6 +1342,7 @@ function getWebviewContent(jslist,css1){
 			} else{
 				document.getElementById("darkmodeToggle").style.display = 'block';
 			}
+			//if (destination == 'IndexingPolicyBox'){			}
 		}		
 		cosmosmap.invalidateSize();
 	}
@@ -1319,7 +1397,7 @@ function getWebviewContent(jslist,css1){
 		cosmosStudioWeb.HandleInfoBoxes(dest);
 	});
 
-	document.getElementById("IndexinPolicyLink").addEventListener("click", function(){
+	document.getElementById("IndexingPolicyLink").addEventListener("click", function(){
 		var dest = this.getAttribute('data-destination');
 		cosmosStudioWeb.HandleInfoBoxes(dest);
 	});
@@ -1352,7 +1430,7 @@ function getWebviewContent(jslist,css1){
 	document.getElementById("QueryAnalyzerStatusButton").addEventListener("click", function(){
 		if (this.value == 'Start'){
 			this.value = 'Pause';
-			this.style.background='red';
+			this.style.background='orangered';
 		} else{
 			this.value = 'Start';
 			this.style.background='seagreen';
@@ -1369,6 +1447,7 @@ function getWebviewContent(jslist,css1){
 	</script>
 	</body>
 	</html>`;
+	return head + body;
 };
 
 function deactivate() {}

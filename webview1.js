@@ -16,7 +16,8 @@ var cosmosStudioWeb = cosmosStudioWeb || {
 	myChart: null,
 	deletelist: [],
 	currentConnType: "",
-	currentdata:null
+	currentdata:null,
+	intervals:[]
 };
 
 cosmosStudioWeb.FindSubscriptions = async function(){
@@ -105,8 +106,7 @@ cosmosStudioWeb.CreateItemToDeleteRow = function(id, pkey){
 	return row;
 };
 
-cosmosStudioWeb.StartDeletingRows = async function(){
-	debugger;
+cosmosStudioWeb.StartDeletingRows = async function(){	
 	cosmosStudioWeb.UpdElementDisabled('StartDeleteButton', true);
 	//document.getElementById('StartDeleteButton').disabled = true;
 	var db = document.getElementById('cosmosdblist').value;
@@ -198,6 +198,7 @@ cosmosStudioWeb.GetQueryOptions = function(){
 	cosmosStudioWeb.queryOptions.forceQueryPlan = document.getElementById('optionForceQPlan').checked;
 	cosmosStudioWeb.queryOptions.maxDegreeOfParallelism = Number(document.getElementById('optionParellelism').value);
 	cosmosStudioWeb.queryOptions.populateIndexingMetrics = document.getElementById('optionEnableIndexingMetrics').checked;
+	cosmosStudioWeb.queryOptions.populateIndexMetrics = document.getElementById('optionEnableIndexingMetrics').checked;
 	var maxitemcount = Number(document.getElementById('optionMaxItemCount').value);
 	if (maxitemcount > 0){
 		cosmosStudioWeb.queryOptions.maxItemCount = maxitemcount;
@@ -206,6 +207,7 @@ cosmosStudioWeb.GetQueryOptions = function(){
 	}
 	if (cosmosStudioWeb.IsQueryAnalyzerRunning()){
 		cosmosStudioWeb.queryOptions.populateIndexingMetrics = true;
+		cosmosStudioWeb.queryOptions.populateIndexMetrics = true;
 	}	
 };
 
@@ -451,7 +453,10 @@ cosmosStudioWeb.HandleConnection = function(connectyBycstring){
 
 cosmosStudioWeb.HandleInfoBoxes = function(dest){
 	var isOpen = document.getElementById(dest).style.display == 'block';
-	var metrics = document.querySelectorAll('.bottomcontainer .MetricsBox');	
+	var metrics = document.querySelectorAll('.bottomcontainer .MetricsBox');
+	if (dest == 'IndexingPolicyBox'){
+		cosmosStudioWeb.CheckReindexingStatus();
+	}
 	for (var i=0; i<metrics.length; i++){
 		metrics.item(i).style.display='none';
 	}
@@ -793,6 +798,49 @@ cosmosStudioWeb.DisplayPhysicalPartitions = function(data){
 			rows.appendChild(tr);
 		}
 	}
+};
+
+cosmosStudioWeb.DisplayReindexingResult = function(val){
+	document.getElementById('reindexingprogress').value = val;
+	document.getElementById('reindexingprogresstxt').textContent = val +'%';
+	var db = document.getElementById('cosmosdblist').value;
+	var container = document.getElementById('cosmoscontainers').value;
+	if (val < 100){			
+			if (cosmosStudioWeb.intervals) {
+				if (cosmosStudioWeb.intervals.length > 0){			
+					var found = cosmosStudioWeb.intervals.filter(function(val){
+						return val.container == container;
+					});
+					if (!found){
+						var intervalid = setInterval(cosmosStudioWeb.CheckReindexingStatus, 30000);
+						cosmosStudioWeb.intervals.push({container:container, intid: intervalid });
+					}
+				} else{
+					var intervalid = setInterval(cosmosStudioWeb.CheckReindexingStatus, 30000);
+						cosmosStudioWeb.intervals.push({container:container, intid: intervalid });
+				}
+			}
+	} else {
+		if (cosmosStudioWeb.intervals) {
+			if (cosmosStudioWeb.intervals.length > 0){				
+				var found = cosmosStudioWeb.intervals.filter(function(val){
+					return val.container == container;
+				});
+				if (found){
+					clearInterval(found[0].intid);					
+				}
+			}
+		}		
+	}
+};
+
+cosmosStudioWeb.CheckReindexingStatus = function(){
+	var db = document.getElementById('cosmosdblist').value;
+	var container = document.getElementById('cosmoscontainers').value;
+	vscode.postMessage({
+		command: 'checkreindexing',
+		conf: {db:db, cont:container}
+	});
 };
 
 cosmosStudioWeb.AddToQueryHistory = function(item){	
@@ -1159,6 +1207,9 @@ window.addEventListener('message', event => {
 			break;		
 		case 'listsubs':
 			cosmosStudioWeb.DisplaySubscriptions(message.jsonData);
+			break;
+		case 'reindexingsult':
+			cosmosStudioWeb.DisplayReindexingResult(message.jsonData);
 			break;
 	}
 });

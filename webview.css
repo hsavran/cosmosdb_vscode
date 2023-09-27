@@ -30,8 +30,8 @@ body{
 
 .toggle1{
     background: gray;
-    border-radius: 5px;
-    border:1px solid black;
+    border-radius: 3px;
+    border:1px solid gray;
     align-self: center;
     padding: 2px 5px;    
     cursor: pointer;
@@ -45,7 +45,7 @@ body{
 
 .tablink{
     min-width: 100px;
-    background: linear-gradient(145deg, gainsboro, white, lightgray, white);
+    background: linear-gradient(45deg,white, ghostwhite);
     margin: 3px 2px 0 2px;    
     border-top-left-radius: 4px;
     border-top-right-radius: 10px;
@@ -58,15 +58,15 @@ body{
 }
 
 .tablink:hover{
-    cursor:pointer;
-    background: linear-gradient(45deg, steelblue, skyblue, dodgerblue);
+    cursor:pointer;    
+    background: dodgerblue;
     transition: all 1s;
     color: white;
     text-shadow: 0 0 2px black;
 }
 
-.selectedtablink {
-    background: linear-gradient(45deg, forestgreen, seagreen,lawngreen) !important;
+.selectedtablink {    
+    background: seagreen;
     transition: all 1s;
     color:white;
     text-shadow: 0 0 2px black;
@@ -188,10 +188,9 @@ body{
 
 .connectcontainer select {
     width: 150px;
-    padding: 7px 3px;
-    box-shadow: 0 0px 12px black;
-    border: 1px solid black;
-    border-radius: 5px;
+    padding: 2px;        
+    border-radius: 3px;
+    background: white;
 }
 
 .querycontainer{    
@@ -214,7 +213,8 @@ body{
     justify-content: space-around;
     align-items: center;
     color: white;
-    font-variant: small-caps;
+    font-variant: all-petite-caps;
+    font-size:11px;
 }
 
 .summarycontainer > article{
@@ -224,15 +224,9 @@ body{
     border-right: 1px solid white;           
 }
 
-.summarycontainer article label {
-    padding: 3px 0;
-    letter-spacing: 1px;
-    font-weight: normal;
-}
-
 .summarycontainer article span{
     font-weight: bold;
-    color:lemonchiffon;
+    color:lightyellow;
 }
 
 .bottomcontainer{
@@ -380,7 +374,7 @@ body{
 }
 
 .QComparisonRowHeader{
-    background: linear-gradient(to bottom, #0a5078, #0f293c, #051a30) !important;
+    background: #404040 !important;
     color: white;
     margin: 5px 0 0 0;    
     padding: 5px 0;
@@ -423,22 +417,19 @@ color:black;
 }
 
 .QComparisonOptions{   
-    background: gainsboro;
+    background: #404040;
     padding: 3px 0;
     border-bottom: 1px solid dimgray;
     text-align: right;
 }
 
 .QComparisonOptions input{
-    background: dimgray;
-    color:white;
+    color:black;        
     letter-spacing: 1px;
     width:100px;
-    text-shadow: 1px 1px 1px black;
-    box-shadow: 0 0 5px dimgray;
     margin: 0 5px;
     border:1px solid black;
-    border-radius: 4px;
+    border-radius: 3px;
 }
 
 .QComparisonOptions input:hover{
@@ -484,6 +475,7 @@ color:black;
     display: none;
     overflow:auto;
     height:100%;
+    font-size:10px;
 }
 
 .MetricsBox > div {
@@ -547,14 +539,14 @@ justify-content: flex-end;
 }
 
 .MetricsTabs{
-    width: 40px;
+    width: 37px;
     color:white;
-    text-shadow: 1px 1px 1px black;
+    text-shadow: 1px 1px 5px black;
     display:flex;
     justify-content: flex-end;
     align-content: flex-start;
     flex-wrap: wrap;                
-    background:linear-gradient(to left, #2f4c4b, #2b2b44);
+    background:#303030;
 }
 
 .metricstablink{
@@ -565,7 +557,7 @@ justify-content: flex-end;
         padding: 5px 10px;
         height: 120px;
         text-align: center;
-        background: radial-gradient(black, #003e02);
+        background: #505050;
 }
 
 .metricstablink:hover{
@@ -601,17 +593,15 @@ justify-content: flex-end;
     text-align: left;
 }
 
-.commandbutton{
-    background: linear-gradient(200deg, aliceblue, whitesmoke,gainsboro, whitesmoke, aliceblue);
-    padding: 7px 5px;
-    border-radius: 8px;
+.commandbutton{        
+    padding: 2px 5px;
+    border-radius: 3px;
     color:black;
-    bordeR:1px solid black;
-    box-shadow: 0 0 2px whitesmoke;
+    border:1px solid gray;
+    background:white;
 }
 
 .commandbutton:hover{    
-    border: 1px solid forestgreen;
     cursor:pointer;
     background: springgreen !important;
 }
@@ -629,11 +619,9 @@ justify-content: flex-end;
     text-shadow: 0 0 3px black;;
 }
 
-.pointreadbox input[type='text']{        
-    padding: 5px 0;
-    border-radius: 3px;
-    border: none;
-    box-shadow: 0 0 5px black;
+.pointreadbox input[type='text']{                
+    border: 1px solid black;
+    box-shadow: none;
     width:96%;
 }
 
@@ -676,7 +664,7 @@ justify-content: flex-end;
 }
 
 .partitionsexecution table thead{
-    background: #102050;
+    background: #102040;
     color:white;
 }
 
@@ -803,6 +791,7 @@ justify-content: flex-end;
     padding: 3px 5px;   
     border-radius: 3px;
     color: black;
+    border:none;
 }
 
 .buttonstyle2:hover{
@@ -818,4 +807,8 @@ justify-content: flex-end;
 
 #deleteButton:hover{
     cursor: pointer;
+}
+
+@keyframes animate-progress{
+    100% {background-position: -100px 0px;}
 }
